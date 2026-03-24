@@ -102,21 +102,26 @@ public class QueryExecutor {
                      ResultSet rs = stmt.executeQuery("EXPLAIN " + sql)) {
                     ResultSetMetaData meta = rs.getMetaData();
                     int cols = meta.getColumnCount();
-                    // Header
+                    // Pipe-delimited format that ExplainPlanPanel can parse as a table
+                    StringBuilder header = new StringBuilder("|");
+                    StringBuilder sep    = new StringBuilder("+");
                     for (int i = 1; i <= cols; i++) {
-                        if (i > 1) plan.append(" | ");
-                        plan.append(String.format("%-20s", meta.getColumnLabel(i)));
+                        String label = meta.getColumnLabel(i);
+                        header.append(" ").append(label).append(" |");
+                        sep.append("-".repeat(label.length() + 2)).append("+");
                     }
-                    plan.append("\n").append("-".repeat(cols * 22)).append("\n");
-                    // Rows
+                    plan.append(sep).append("\n")
+                        .append(header).append("\n")
+                        .append(sep).append("\n");
                     while (rs.next()) {
+                        plan.append("|");
                         for (int i = 1; i <= cols; i++) {
-                            if (i > 1) plan.append(" | ");
                             String val = rs.getString(i);
-                            plan.append(String.format("%-20s", val == null ? "NULL" : val));
+                            plan.append(" ").append(val == null ? "NULL" : val).append(" |");
                         }
                         plan.append("\n");
                     }
+                    plan.append(sep).append("\n");
                 }
             }
             case ORACLE -> {

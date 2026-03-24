@@ -28,7 +28,6 @@ import com.dbexplorer.model.QueryResult;
 import com.dbexplorer.service.ConnectionManager;
 import com.dbexplorer.service.DynamoDbExecutor;
 import com.dbexplorer.service.QueryExecutor;
-
 public class MainFrame extends JFrame {
 
     private final ConnectionManager connectionManager;
@@ -50,6 +49,7 @@ public class MainFrame extends JFrame {
         connectionListPanel = new ConnectionListPanel(connectionManager);
         sqlEditorPanel = new SqlEditorPanel();
         sqlEditorPanel.setQueryExecutor(queryExecutor);
+        sqlEditorPanel.setConnectionManager(connectionManager);
         logPanel = new LogPanel();
         statusLabel = new JLabel("No active connection");
 
@@ -260,6 +260,7 @@ public class MainFrame extends JFrame {
                 "Confirm Delete", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             connectionManager.deleteConnection(info.getId());
+            SqlAutoComplete.invalidateCache(info.getId());
             sqlEditorPanel.refreshTabHeaders(info.getId(), false);
             connectionListPanel.refreshList();
             logPanel.logInfo("Connection deleted: " + info.getName());
@@ -272,6 +273,7 @@ public class MainFrame extends JFrame {
             connectionManager.disconnect(info.getId());
             // Tabs keep their binding — just update the status dot to red
             sqlEditorPanel.refreshTabHeaders(info.getId(), false);
+            SqlAutoComplete.invalidateCache(info.getId());
             logPanel.logInfo("Disconnected: " + info.getName());
         } else {
             try {
@@ -284,6 +286,9 @@ public class MainFrame extends JFrame {
                 sqlEditorPanel.refreshTabHeaders(info.getId(), true);
                 connectionListPanel.refreshList();
                 connectionListPanel.loadSchemasForConnection(info);
+                // Warm autocomplete cache on background thread
+                java.sql.Connection jdbcConn = connectionManager.getActiveConnection(info.getId());
+                if (jdbcConn != null) SqlAutoComplete.warmCache(info, jdbcConn);
             } catch (SQLException ex) {
                 logPanel.logError("Connection failed: " + info.getName(), ex);
                 JOptionPane.showMessageDialog(this,
@@ -305,6 +310,8 @@ public class MainFrame extends JFrame {
                         + " (" + connDetail + ")");
                 connectionListPanel.refreshList();
                 connectionListPanel.loadSchemasForConnection(info);
+                java.sql.Connection jdbcConn = connectionManager.getActiveConnection(info.getId());
+                if (jdbcConn != null) SqlAutoComplete.warmCache(info, jdbcConn);
             } catch (SQLException ex) {
                 logPanel.logError("Connection failed: " + info.getName(), ex);
                 JOptionPane.showMessageDialog(this,
@@ -353,6 +360,8 @@ public class MainFrame extends JFrame {
                             + " (" + connDetail + ")");
                     connectionListPanel.refreshList();
                     connectionListPanel.loadSchemasForConnection(selectedInfo);
+                    java.sql.Connection jdbcConn = connectionManager.getActiveConnection(selectedInfo.getId());
+                    if (jdbcConn != null) SqlAutoComplete.warmCache(selectedInfo, jdbcConn);
                 } catch (SQLException ex) {
                     logPanel.logError("Connection failed: " + selectedInfo.getName(), ex);
                     JOptionPane.showMessageDialog(this,
@@ -384,6 +393,7 @@ public class MainFrame extends JFrame {
         }
         connectionManager.disconnect(tabConn.getId());
         sqlEditorPanel.refreshTabHeaders(tabConn.getId(), false);
+        SqlAutoComplete.invalidateCache(tabConn.getId());
         connectionListPanel.refreshList();
         logPanel.logInfo("Disconnected: " + tabConn.getName());
         updateStatus();
@@ -466,6 +476,7 @@ public class MainFrame extends JFrame {
                  logPanel.logInfo("Reconnected to: " + tabConn.getName());
                  connectionListPanel.refreshList(); // Refresh UI status
                  sqlEditorPanel.refreshTabHeaders(tabConn.getId(), true);
+                 SqlAutoComplete.warmCache(tabConn, conn);
              } catch (SQLException e) {
                  rp.displayError("Connection Lost",
                          "Connection lost for " + tabConn.getName() + " and reconnection failed: " + e.getMessage());
@@ -537,6 +548,7 @@ public class MainFrame extends JFrame {
                  logPanel.logInfo("Reconnected to: " + tabConn.getName());
                  connectionListPanel.refreshList();
                  sqlEditorPanel.refreshTabHeaders(tabConn.getId(), true);
+                 SqlAutoComplete.warmCache(tabConn, conn);
              } catch (SQLException e) {
                 ExplainPlanPanel ep = ts.explainPlanPanel;
                 ts.bottomTabs.setSelectedComponent(ep);
@@ -565,7 +577,7 @@ public class MainFrame extends JFrame {
                     long elapsed = System.currentTimeMillis() - start;
                     SwingUtilities.invokeLater(() -> {
                         ep.hideLoading();
-                        ep.displayPlan(plan, elapsed);
+                        ep.displayPlan(plan, elapsed, tabConn.getDbType());
                         logPanel.logInfo("Explain plan generated in " + elapsed + " ms");
                         statusLabel.setText("Plan ready | " + elapsed + " ms | "
                                 + tabConn.getName());

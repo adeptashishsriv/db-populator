@@ -1,6 +1,7 @@
 package com.dbexplorer.ui;
 
 import com.dbexplorer.model.ConnectionInfo;
+import com.dbexplorer.service.ConnectionManager;
 import com.dbexplorer.service.QueryExecutor;
 
 import javax.swing.*;
@@ -26,6 +27,7 @@ public class SqlEditorPanel extends JPanel {
     private int tabCounter = 0;
     private Runnable onRunQuery;
     private QueryExecutor queryExecutor;
+    private ConnectionManager connectionManager;
 
     /** Per-tab state keyed by the tab's root component (the JSplitPane). */
     private final Map<Component, TabState> tabStates = new HashMap<>();
@@ -38,15 +40,17 @@ public class SqlEditorPanel extends JPanel {
         public final JTabbedPane bottomTabs;
         // connectionInfo is permanently bound at tab creation — never cleared
         public final ConnectionInfo connectionInfo;
+        public final SqlAutoComplete autoComplete;
 
         TabState(JTextPane editor, ResultPanel resultPanel,
                  ExplainPlanPanel explainPlanPanel, JTabbedPane bottomTabs,
-                 ConnectionInfo connectionInfo) {
+                 ConnectionInfo connectionInfo, SqlAutoComplete autoComplete) {
             this.editor = editor;
             this.resultPanel = resultPanel;
             this.explainPlanPanel = explainPlanPanel;
             this.bottomTabs = bottomTabs;
             this.connectionInfo = connectionInfo;
+            this.autoComplete = autoComplete;
         }
     }
 
@@ -64,6 +68,8 @@ public class SqlEditorPanel extends JPanel {
     }
 
     public void setOnRunQuery(Runnable onRunQuery) { this.onRunQuery = onRunQuery; }
+
+    public void setConnectionManager(ConnectionManager cm) { this.connectionManager = cm; }
 
     public void setQueryExecutor(QueryExecutor queryExecutor) {
         this.queryExecutor = queryExecutor;
@@ -121,7 +127,7 @@ public class SqlEditorPanel extends JPanel {
         tabbedPane.setSelectedIndex(idx);
 
         TabState state = new TabState(editor, resultPanel, explainPlanPanel, bottomTabs,
-                connectionInfo);
+                connectionInfo, buildAutoComplete(editor, connectionInfo));
         tabStates.put(splitPane, state);
 
         editor.requestFocusInWindow();
@@ -203,6 +209,17 @@ public class SqlEditorPanel extends JPanel {
     private static final Icon DOT_GREEN = makeStatusDot(new Color(34, 197, 94));
     private static final Icon DOT_RED   = makeStatusDot(new Color(239, 68, 68));
     private static final Icon DOT_GREY  = makeStatusDot(new Color(160, 160, 160));
+
+    /** Build a SqlAutoComplete for a new tab, or null if no ConnectionManager is set. */
+    private SqlAutoComplete buildAutoComplete(JTextPane editor, ConnectionInfo info) {
+        if (connectionManager == null) return null;
+        ConnectionManager cm = connectionManager;
+        return new SqlAutoComplete(
+                editor,
+                () -> info,
+                () -> info != null ? cm.getActiveConnection(info.getId()) : null
+        );
+    }
 
     private JTextPane createEditor() {
         JTextPane editor = new JTextPane();
