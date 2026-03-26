@@ -5,7 +5,6 @@ import com.dbexplorer.model.LazyQueryResult;
 import com.dbexplorer.model.QueryResult;
 
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
@@ -24,6 +23,10 @@ public class QueryExecutor {
     /**
      * Execute SQL asynchronously. For SELECT queries, returns a LazyQueryResult
      * via onLazyResult. For non-SELECT, returns a QueryResult via onSuccess.
+     *
+     * Performance: the first page of rows is fetched on the background thread
+     * before handing off to the UI, so the table is populated immediately on
+     * the first EDT paint rather than requiring a second round-trip.
      */
     public Future<?> executeAsync(Connection connection, String sql,
                                   Consumer<LazyQueryResult> onLazyResult,
@@ -32,14 +35,20 @@ public class QueryExecutor {
         return executor.submit(() -> {
             try {
                 long start = System.currentTimeMillis();
-                Statement stmt = connection.createStatement();
+                // TYPE_FORWARD_ONLY + CONCUR_READ_ONLY lets the driver stream rows
+                Statement stmt = connection.createStatement(
+                        ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
                 stmt.setFetchSize(LazyQueryResult.DEFAULT_FETCH_SIZE);
+                stmt.setFetchDirection(ResultSet.FETCH_FORWARD);
                 boolean hasResultSet = stmt.execute(sql);
                 long elapsed = System.currentTimeMillis() - start;
 
                 if (hasResultSet) {
                     ResultSet rs = stmt.getResultSet();
                     LazyQueryResult lazy = new LazyQueryResult(stmt, rs, elapsed);
+                    // Pre-fetch first page on this background thread so the EDT
+                    // can render rows immediately without a second async hop.
+                    lazy.fetchNextPage();
                     onLazyResult.accept(lazy);
                 } else {
                     int affected = stmt.getUpdateCount();
@@ -56,11 +65,11 @@ public class QueryExecutor {
      * Fetch the next page from a LazyQueryResult asynchronously.
      */
     public Future<?> fetchNextPageAsync(LazyQueryResult lazyResult,
-                                        Consumer<List<List<Object>>> onPage,
+                                        Consumer<List<String[]>> onPage,
                                         Consumer<SQLException> onError) {
         return executor.submit(() -> {
             try {
-                List<List<Object>> page = lazyResult.fetchNextPage();
+                List<String[]> page = lazyResult.fetchNextPage();
                 onPage.accept(page);
             } catch (SQLException e) {
                 onError.accept(e);

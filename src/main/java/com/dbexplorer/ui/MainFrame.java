@@ -114,24 +114,21 @@ public class MainFrame extends JFrame {
         toolbar.setFloatable(false);
         toolbar.setBorderPainted(true);
 
-        JButton addBtn = makeToolButton("Add Connection", "➕");
+        JButton addBtn = makeToolButton("Add Connection", DbIcons.TB_ADD);
         addBtn.addActionListener(e -> showAddConnectionDialog());
 
-        JButton disconnectBtn = makeToolButton("Disconnect DB", "⛔");
+        JButton disconnectBtn = makeToolButton("Disconnect DB", DbIcons.TB_DISCONNECT);
         disconnectBtn.setToolTipText("Disconnect selected connection (tabs keep their binding)");
         disconnectBtn.addActionListener(e -> disconnectSelectedConnection());
 
-        JButton runBtn = makeToolButton("Run Query (Ctrl+Enter)", "▶");
-        runBtn.setForeground(new Color(40, 160, 40));
+        JButton runBtn = makeToolButton("Run Query (Ctrl+Enter)", DbIcons.TB_RUN);
         runBtn.addActionListener(e -> runQuery());
 
-        newTabBtn = makeToolButton("New Tab", "📄");
-        // Updated action for New Tab button
+        newTabBtn = makeToolButton("New Tab", DbIcons.TB_NEW_TAB);
         newTabBtn.addActionListener(e -> openNewTabWithSelectedConnection());
-        newTabBtn.setEnabled(false); // Initially disabled
+        newTabBtn.setEnabled(false);
 
-        JButton clearBtn = makeToolButton("Clear Console", "🗑");
-        clearBtn.setForeground(new Color(180, 40, 40));
+        JButton clearBtn = makeToolButton("Clear Console", DbIcons.TB_CLEAR);
         clearBtn.addActionListener(e -> {
             logPanel.clear();
             SqlEditorPanel.TabState ts = sqlEditorPanel.getActiveTabState();
@@ -141,7 +138,7 @@ public class MainFrame extends JFrame {
             }
         });
 
-        JButton explainBtn = makeToolButton("Explain Plan", "📊");
+        JButton explainBtn = makeToolButton("Explain Plan", DbIcons.TB_EXPLAIN);
         explainBtn.addActionListener(e -> runExplainPlan());
 
         JComboBox<String> themeCombo = new JComboBox<>(ThemeManager.getThemeNames());
@@ -151,17 +148,12 @@ public class MainFrame extends JFrame {
         themeCombo.addActionListener(e -> {
             String selected = (String) themeCombo.getSelectedItem();
             if (selected != null) {
-                // Play animation first
                 ThemeAnimationOverlay.AnimationType anim =
                         ThemeAnimationOverlay.animationFor(selected);
-
                 ThemeManager.applyTheme(selected);
                 SwingUtilities.updateComponentTreeUI(this);
-
-                // Re-install glass pane after updateComponentTreeUI (it resets it)
                 setGlassPane(animationOverlay);
                 animationOverlay.setBounds(0, 0, getWidth(), getHeight());
-
                 if (anim != ThemeAnimationOverlay.AnimationType.NONE) {
                     animationOverlay.play(anim);
                 }
@@ -180,13 +172,7 @@ public class MainFrame extends JFrame {
         toolbar.add(new JLabel("Theme: "));
         toolbar.add(themeCombo);
 
-        JButton aboutBtn = makeToolButton("About", "ℹ");
-        // Make the About button a bit more prominent
-        aboutBtn.setFont(aboutBtn.getFont().deriveFont(Font.BOLD, 14f));
-        // Use a distinct color for the about button to make it pop
-        // A nice shade of blue often works well for information/help
-        aboutBtn.setForeground(new Color(0, 120, 215)); 
-        
+        JButton aboutBtn = makeToolButton("About", DbIcons.TB_ABOUT);
         aboutBtn.addActionListener(e -> new AboutDialog(this).setVisible(true));
         toolbar.addSeparator();
         toolbar.add(aboutBtn);
@@ -194,11 +180,25 @@ public class MainFrame extends JFrame {
         add(toolbar, BorderLayout.NORTH);
     }
 
-    private JButton makeToolButton(String tooltip, String icon) {
+    private JButton makeToolButton(String tooltip, javax.swing.Icon icon) {
         JButton btn = new JButton(icon);
         btn.setToolTipText(tooltip);
         btn.setFocusable(false);
-        btn.setFont(btn.getFont().deriveFont(16f));
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setOpaque(false);
+        btn.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        // Subtle hover effect
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseEntered(java.awt.event.MouseEvent e) {
+                btn.setContentAreaFilled(true);
+                btn.setOpaque(true);
+            }
+            @Override public void mouseExited(java.awt.event.MouseEvent e) {
+                btn.setContentAreaFilled(false);
+                btn.setOpaque(false);
+            }
+        });
         return btn;
     }
 
@@ -208,6 +208,9 @@ public class MainFrame extends JFrame {
         connectionListPanel.setOnDelete(this::deleteConnection);
         connectionListPanel.setOnOpenQueryTab(this::openQueryTabForConnection);
         connectionListPanel.setOnViewData(this::viewTableData);
+        connectionListPanel.setOnShowDiagram(this::showSchemaDiagram);
+        connectionListPanel.setOnExportDdl(this::showDdlExport);
+        connectionListPanel.setOnExportTable(this::showTableExport);
         connectionListPanel.addTreeSelectionListener(e -> {
             ConnectionInfo info = connectionListPanel.getSelectedConnection();
             newTabBtn.setEnabled(info != null);
@@ -325,8 +328,61 @@ public class MainFrame extends JFrame {
         updateStatus();
     }
     
-    private void viewTableData(ConnectionInfo info, String sql) {
-         if (!connectionManager.isConnected(info.getId())) {
+    private void showSchemaDiagram(ConnectionInfo info, String schema) {
+        java.sql.Connection conn = connectionManager.getActiveConnection(info.getId());
+        if (conn == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Connect to " + info.getName() + " first.",
+                    "Not Connected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        new SchemaDiagramDialog(this, info, conn, schema).setVisible(true);
+    }
+
+    private void showDdlExport(ConnectionInfo info, String schema) {
+        java.sql.Connection conn = connectionManager.getActiveConnection(info.getId());
+        if (conn == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Connect to " + info.getName() + " first.",
+                    "Not Connected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        new DdlExportDialog(this, info, conn, schema).setVisible(true);
+    }
+
+    /**
+     * Handles table-level export actions.
+     * The encoded key format is: "ACTION\0schema\0table"
+     * where ACTION is one of DDL, INSERT, UPDATE, CSV.
+     * Opens a TableExportDialog pre-selected to the requested tab.
+     */
+    private void showTableExport(ConnectionInfo info, String encoded) {
+        java.sql.Connection conn = connectionManager.getActiveConnection(info.getId());
+        if (conn == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Connect to " + info.getName() + " first.",
+                    "Not Connected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        // encoded = "ACTION\0schema\0table"
+        String[] parts  = encoded.split("\0", 3);
+        String action   = parts[0];
+        String schema   = parts.length > 1 ? parts[1] : null;
+        String table    = parts.length > 2 ? parts[2] : parts[1];
+
+        TableExportDialog dlg = new TableExportDialog(this, info, conn, schema, table);
+        // Select the right tab based on action
+        int tabIdx = switch (action) {
+            case "INSERT" -> 1;
+            case "UPDATE" -> 2;
+            case "CSV"    -> 3;
+            default       -> 0; // DDL
+        };
+        dlg.selectTab(tabIdx);
+        dlg.setVisible(true);
+    }
+
+    private void viewTableData(ConnectionInfo info, String sql) {         if (!connectionManager.isConnected(info.getId())) {
             try {
                 connectionManager.connect(info);
             } catch (SQLException ex) {

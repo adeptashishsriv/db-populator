@@ -20,7 +20,7 @@ public class SchemaExplorerService {
         List<String> schemas = new ArrayList<>();
 
         if (dbType == DatabaseType.SQLITE) {
-            schemas.add("main"); // SQLite has no real schemas; "main" is the default
+            schemas.add("main");
             return schemas;
         }
 
@@ -83,30 +83,7 @@ public class SchemaExplorerService {
             case POSTGRESQL -> "SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = ?";
             case ORACLE -> "SELECT sequence_name FROM all_sequences WHERE sequence_owner = ?";
             case SQLSERVER -> "SELECT name FROM sys.sequences WHERE schema_id = SCHEMA_ID(?)";
-            case MYSQL, DYNAMODB, SQLITE -> null;
-        };
-        if (sql == null) return names;
-
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, schema);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) names.add(rs.getString(1));
-            }
-        } catch (SQLException ignored) {
-            // Some DBs/versions may not support sequences
-        }
-        Collections.sort(names);
-        return names;
-    }
-
-    public List<String> getIndexes(Connection conn, DatabaseType dbType, String schema) throws SQLException {
-        List<String> names = new ArrayList<>();
-        String sql = switch (dbType) {
-            case POSTGRESQL -> "SELECT indexname FROM pg_indexes WHERE schemaname = ? ORDER BY indexname";
-            case ORACLE -> "SELECT index_name FROM all_indexes WHERE owner = ? ORDER BY index_name";
-            case SQLSERVER -> "SELECT i.name FROM sys.indexes i JOIN sys.tables t ON i.object_id = t.object_id "
-                    + "JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name = ? AND i.name IS NOT NULL ORDER BY i.name";
-            case MYSQL, DYNAMODB, SQLITE -> null;
+            case MYSQL, DYNAMODB, SQLITE, GENERIC -> null;
         };
         if (sql == null) return names;
 
@@ -143,5 +120,82 @@ public class SchemaExplorerService {
         } catch (SQLException ignored) {}
         Collections.sort(names);
         return names;
+    }
+
+    public List<String> getIndexes(Connection conn, DatabaseType dbType, String schema) throws SQLException {
+        List<String> names = new ArrayList<>();
+        DatabaseMetaData meta = conn.getMetaData();
+        String catalog = (dbType == DatabaseType.MYSQL) ? schema : null;
+        String schemaPattern = (dbType == DatabaseType.MYSQL || dbType == DatabaseType.SQLITE) ? null : schema;
+
+        List<String> tables = getTables(conn, dbType, schema);
+        for (String table : tables) {
+            try (ResultSet rs = meta.getIndexInfo(catalog, schemaPattern, table, false, false)) {
+                while (rs.next()) {
+                    String indexName = rs.getString("INDEX_NAME");
+                    if (indexName != null && !names.contains(indexName)) {
+                        names.add(indexName);
+                    }
+                }
+            } catch (SQLException ignored) {}
+        }
+        Collections.sort(names);
+        return names;
+    }
+
+    // ── Diagram metadata ──────────────────────────────────────────────────────
+
+    /** Returns primary key column names for a table. */
+    public List<String> getPrimaryKeys(Connection conn, DatabaseType dbType,
+                                       String schema, String table) throws SQLException {
+        List<String> pks = new ArrayList<>();
+        DatabaseMetaData meta = conn.getMetaData();
+        String catalog = (dbType == DatabaseType.MYSQL) ? schema : null;
+        String schemaArg = (dbType == DatabaseType.MYSQL || dbType == DatabaseType.SQLITE) ? null : schema;
+        try (ResultSet rs = meta.getPrimaryKeys(catalog, schemaArg, table)) {
+            while (rs.next()) pks.add(rs.getString("COLUMN_NAME"));
+        }
+        return pks;
+    }
+
+    /**
+     * Returns imported foreign key relationships for a table.
+     * Each entry: [fkTable, fkColumn, pkTable, pkColumn]
+     */
+    public List<String[]> getImportedForeignKeys(Connection conn, DatabaseType dbType,
+                                                  String schema, String table) throws SQLException {
+        List<String[]> fks = new ArrayList<>();
+        DatabaseMetaData meta = conn.getMetaData();
+        String catalog = (dbType == DatabaseType.MYSQL) ? schema : null;
+        String schemaArg = (dbType == DatabaseType.MYSQL || dbType == DatabaseType.SQLITE) ? null : schema;
+        try (ResultSet rs = meta.getImportedKeys(catalog, schemaArg, table)) {
+            while (rs.next()) {
+                fks.add(new String[]{
+                    table,
+                    rs.getString("FKCOLUMN_NAME"),
+                    rs.getString("PKTABLE_NAME"),
+                    rs.getString("PKCOLUMN_NAME")
+                });
+            }
+        } catch (SQLException ignored) {}
+        return fks;
+    }
+
+    /** Returns raw column metadata [name, type] for diagram display. */
+    public List<String[]> getColumnDetails(Connection conn, DatabaseType dbType,
+                                            String schema, String table) throws SQLException {
+        List<String[]> cols = new ArrayList<>();
+        DatabaseMetaData meta = conn.getMetaData();
+        String catalog = (dbType == DatabaseType.MYSQL) ? schema : null;
+        String schemaArg = (dbType == DatabaseType.MYSQL || dbType == DatabaseType.SQLITE) ? null : schema;
+        try (ResultSet rs = meta.getColumns(catalog, schemaArg, table, null)) {
+            while (rs.next()) {
+                cols.add(new String[]{
+                    rs.getString("COLUMN_NAME"),
+                    rs.getString("TYPE_NAME")
+                });
+            }
+        }
+        return cols;
     }
 }

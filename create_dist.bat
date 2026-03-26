@@ -1,4 +1,4 @@
-@echo off
+rem @echo off
 echo ==========================================
 echo      DB Explorer Distribution Builder
 echo ==========================================

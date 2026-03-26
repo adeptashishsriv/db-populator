@@ -7,7 +7,8 @@ public enum DatabaseType {
     SQLSERVER("SQL Server", "com.microsoft.sqlserver.jdbc.SQLServerDriver",
             "jdbc:sqlserver://%s:%d;databaseName=%s;encrypt=false", 1433, false),
     SQLITE("SQLite", "org.sqlite.JDBC", "jdbc:sqlite:%s", 0, false),
-    DYNAMODB("DynamoDB", null, null, 0, true);
+    DYNAMODB("DynamoDB", null, null, 0, true),
+    GENERIC("Generic JDBC", null, null, 0, false);
 
     private final String displayName;
     private final String driverClass;

@@ -40,47 +40,27 @@ public class AboutDialog extends JDialog {
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 22f));
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel editionLabel = new JLabel("Community Edition");
+        JLabel editionLabel = new JLabel("Professional Community Edition");
         editionLabel.setFont(editionLabel.getFont().deriveFont(Font.ITALIC, 13f));
-        editionLabel.setForeground(new Color(100, 140, 200));
+        editionLabel.setForeground(new Color(60, 160, 120));
         editionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel versionLabel = new JLabel("Version 1.0.0");
+        JLabel taglineLabel = new JLabel("Enterprise-grade features. Zero cost.");
+        taglineLabel.setFont(taglineLabel.getFont().deriveFont(Font.BOLD, 11f));
+        taglineLabel.setForeground(new Color(60, 160, 120));
+        taglineLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel versionLabel = new JLabel("Version 2.0.0");
         versionLabel.setFont(versionLabel.getFont().deriveFont(Font.PLAIN, 12f));
         versionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel releaseLabel = new JLabel("Release Date: March 22, 2026");
+        JLabel releaseLabel = new JLabel("Release Date: March 24, 2026");
         releaseLabel.setFont(releaseLabel.getFont().deriveFont(Font.PLAIN, 11f));
         releaseLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JSeparator sep = new JSeparator();
         sep.setMaximumSize(new Dimension(280, 2));
         sep.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JLabel builtByPrefix = new JLabel("Built by ");
-        builtByPrefix.setFont(builtByPrefix.getFont().deriveFont(Font.PLAIN, 12f));
-        builtByPrefix.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        // Clickable LinkedIn link
-        JPanel builtByPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        builtByPanel.setOpaque(false);
-        JLabel prefixLbl = new JLabel("Built by ");
-        prefixLbl.setFont(prefixLbl.getFont().deriveFont(Font.PLAIN, 12f));
-        JLabel linkLabel = new JLabel("<html><a href=''>Ashish Srivastava</a></html>");
-        linkLabel.setFont(linkLabel.getFont().deriveFont(Font.PLAIN, 12f));
-        linkLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        linkLabel.setToolTipText("https://www.linkedin.com/in/ashishsriv/");
-        linkLabel.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                try {
-                    Desktop.getDesktop().browse(new java.net.URI("https://www.linkedin.com/in/ashishsriv/"));
-                } catch (Exception ignored) {}
-            }
-        });
-        builtByPanel.add(prefixLbl);
-        builtByPanel.add(linkLabel);
-        builtByPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JLabel companyLabel = new JLabel("\u00a9 2026 Adept Software");
         companyLabel.setFont(companyLabel.getFont().deriveFont(Font.BOLD, 12f));
@@ -99,6 +79,8 @@ public class AboutDialog extends JDialog {
         textPanel.add(titleLabel);
         textPanel.add(Box.createVerticalStrut(4));
         textPanel.add(editionLabel);
+        textPanel.add(Box.createVerticalStrut(2));
+        textPanel.add(taglineLabel);
         textPanel.add(Box.createVerticalStrut(6));
         textPanel.add(versionLabel);
         textPanel.add(Box.createVerticalStrut(2));
@@ -106,8 +88,6 @@ public class AboutDialog extends JDialog {
         textPanel.add(Box.createVerticalStrut(12));
         textPanel.add(sep);
         textPanel.add(Box.createVerticalStrut(12));
-        textPanel.add(builtByPanel);
-        textPanel.add(Box.createVerticalStrut(8));
         textPanel.add(companyLabel);
         textPanel.add(Box.createVerticalStrut(2));
         textPanel.add(locationLabel);

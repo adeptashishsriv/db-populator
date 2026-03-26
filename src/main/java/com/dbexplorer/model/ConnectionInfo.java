@@ -19,6 +19,11 @@ public class ConnectionInfo {
     private String awsSecretKey;
     private String awsEndpoint; // optional, for local DynamoDB
 
+    // Generic JDBC fields
+    private String customDriverClass;  // fully-qualified driver class name
+    private String customJdbcUrl;      // full JDBC URL
+    private String customDriverJar;    // path to the driver JAR file
+
     public ConnectionInfo() {
         this.id = UUID.randomUUID().toString();
     }
@@ -63,7 +68,15 @@ public class ConnectionInfo {
     public String getAwsEndpoint() { return awsEndpoint; }
     public void setAwsEndpoint(String awsEndpoint) { this.awsEndpoint = awsEndpoint; }
 
+    public String getCustomDriverClass() { return customDriverClass; }
+    public void setCustomDriverClass(String customDriverClass) { this.customDriverClass = customDriverClass; }
+    public String getCustomJdbcUrl() { return customJdbcUrl; }
+    public void setCustomJdbcUrl(String customJdbcUrl) { this.customJdbcUrl = customJdbcUrl; }
+    public String getCustomDriverJar() { return customDriverJar; }
+    public void setCustomDriverJar(String customDriverJar) { this.customDriverJar = customDriverJar; }
+
     public String getJdbcUrl() {
+        if (dbType == DatabaseType.GENERIC) return customJdbcUrl != null ? customJdbcUrl : "";
         if (dbType != null && dbType.isNoSql()) {
             return dbType.getDisplayName() + " [" + (awsRegion != null ? awsRegion : "local") + "]";
         }

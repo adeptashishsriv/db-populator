@@ -11,71 +11,102 @@ import java.util.List;
 /**
  * Holds an open ResultSet and fetches rows in pages.
  * Must be closed when no longer needed to release DB resources.
+ *
+ * Performance notes:
+ * - Uses getString() instead of getObject() to avoid driver-side type materialisation
+ *   (avoids BLOB/CLOB reads, BigDecimal allocations, etc.)
+ * - Rows are stored as List<String[]> (primitive arrays) rather than List<List<Object>>
+ *   to reduce GC pressure on large result sets.
+ * - Column metadata (max observed char width per column) is tracked here so the UI
+ *   can size columns without calling prepareRenderer on the EDT.
  */
 public class LazyQueryResult implements AutoCloseable {
 
-    public static final int DEFAULT_FETCH_SIZE = 200;
+    public static final int DEFAULT_FETCH_SIZE = 500;
 
-    private final List<String> columns;
-    private final Statement statement;
-    private final ResultSet resultSet;
-    private final int columnCount;
-    private final long executionTimeMs;
+    private final List<String>   columns;
+    private final int[]          columnTypes;   // java.sql.Types values
+    private final Statement      statement;
+    private final ResultSet      resultSet;
+    private final int            columnCount;
+    private final long           executionTimeMs;
 
-    private final List<List<Object>> fetchedRows = new ArrayList<>();
+    // Accumulated rows — stored as String arrays for minimal heap overhead
+    private final List<String[]> fetchedRows = new ArrayList<>(DEFAULT_FETCH_SIZE * 2);
+
+    // Max observed string length per column — used for fast column sizing
+    private final int[]  maxColWidth;
+
     private boolean exhausted = false;
 
     public LazyQueryResult(Statement statement, ResultSet resultSet, long executionTimeMs)
             throws SQLException {
-        this.statement = statement;
-        this.resultSet = resultSet;
+        this.statement       = statement;
+        this.resultSet       = resultSet;
         this.executionTimeMs = executionTimeMs;
 
         ResultSetMetaData meta = resultSet.getMetaData();
         this.columnCount = meta.getColumnCount();
 
         List<String> cols = new ArrayList<>(columnCount);
+        this.columnTypes  = new int[columnCount];
+        this.maxColWidth  = new int[columnCount];
+
         for (int i = 1; i <= columnCount; i++) {
-            cols.add(meta.getColumnLabel(i));
+            String label = meta.getColumnLabel(i);
+            cols.add(label);
+            columnTypes[i - 1] = meta.getColumnType(i);
+            maxColWidth[i - 1] = label.length(); // seed with header width
         }
         this.columns = Collections.unmodifiableList(cols);
     }
 
-    public List<String> getColumns() { return columns; }
-    public long getExecutionTimeMs() { return executionTimeMs; }
-    public boolean isExhausted() { return exhausted; }
-    public int getFetchedRowCount() { return fetchedRows.size(); }
+    public List<String>  getColumns()         { return columns; }
+    public long          getExecutionTimeMs()  { return executionTimeMs; }
+    public boolean       isExhausted()         { return exhausted; }
+    public int           getFetchedRowCount()  { return fetchedRows.size(); }
+    public int[]         getMaxColWidths()     { return maxColWidth; }
+
+    /**
+     * Returns a snapshot of all fetched rows as String arrays.
+     * Safe to read from the EDT after a page fetch completes.
+     */
+    public List<String[]> getFetchedRows() {
+        return Collections.unmodifiableList(fetchedRows);
+    }
 
     /**
      * Fetch the next page of rows (up to fetchSize).
-     * Returns the newly fetched rows (empty list if exhausted).
+     * Returns only the newly fetched rows.
+     * Called on a background thread — never on the EDT.
      */
-    public List<List<Object>> fetchNextPage(int fetchSize) throws SQLException {
+    public List<String[]> fetchNextPage(int fetchSize) throws SQLException {
         if (exhausted) return List.of();
 
-        List<List<Object>> page = new ArrayList<>(fetchSize);
+        List<String[]> page = new ArrayList<>(fetchSize);
         int count = 0;
+
         while (count < fetchSize && resultSet.next()) {
-            List<Object> row = new ArrayList<>(columnCount);
+            String[] row = new String[columnCount];
             for (int i = 1; i <= columnCount; i++) {
-                row.add(resultSet.getObject(i));
+                String val = resultSet.getString(i);
+                if (val == null) val = "";
+                row[i - 1] = val;
+                // Track max width for column sizing (cap at 80 chars to avoid huge columns)
+                int len = Math.min(val.length(), 80);
+                if (len > maxColWidth[i - 1]) maxColWidth[i - 1] = len;
             }
             page.add(row);
             count++;
         }
 
-        if (count < fetchSize) {
-            exhausted = true;
-        }
-
+        if (count < fetchSize) exhausted = true;
         fetchedRows.addAll(page);
         return page;
     }
 
-    /**
-     * Fetch the next page using the default fetch size.
-     */
-    public List<List<Object>> fetchNextPage() throws SQLException {
+    /** Fetch next page using the default fetch size. */
+    public List<String[]> fetchNextPage() throws SQLException {
         return fetchNextPage(DEFAULT_FETCH_SIZE);
     }
 

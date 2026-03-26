@@ -12,6 +12,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import javax.swing.BorderFactory;
+import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
@@ -33,6 +34,11 @@ import com.dbexplorer.service.SchemaExplorerService;
 /**
  * Left panel showing saved connections as a tree with expandable schema objects.
  * Tree structure: Root → Connection → Schema → (Tables, Views, Sequences, Indexes, Functions, Procedures) → objects
+ *
+ * Resilience: every background metadata fetch calls ensureConnection() which
+ * silently reconnects if the JDBC connection has gone stale (idle timeout,
+ * server restart, network blip).  The user never sees a raw "Error: connection
+ * closed" message — the tree just reloads transparently.
  */
 public class ConnectionListPanel extends JPanel {
 
@@ -47,6 +53,10 @@ public class ConnectionListPanel extends JPanel {
     private Consumer<ConnectionInfo> onDelete;
     private Consumer<ConnectionInfo> onOpenQueryTab;
     private BiConsumer<ConnectionInfo, String> onViewData;
+    private BiConsumer<ConnectionInfo, String> onShowDiagram;
+    private BiConsumer<ConnectionInfo, String> onExportDdl;
+    // table export: (connectionInfo, schema, tableName) — encoded as "schema\0table"
+    private BiConsumer<ConnectionInfo, String> onExportTable;
 
     // Marker strings for category nodes
     static final String CAT_TABLES = "Tables";
@@ -128,12 +138,27 @@ public class ConnectionListPanel extends JPanel {
                     menu.add(deleteItem);
 
                     menu.show(tree, e.getX(), e.getY());
+                } else if (userObj instanceof SchemaNode sn) {
+                    JPopupMenu menu = new JPopupMenu();
+                    JMenuItem diagramItem = new JMenuItem("Schema Diagram", DbIcons.MENU_DIAGRAM);
+                    diagramItem.addActionListener(a -> {
+                        if (onShowDiagram != null)
+                            onShowDiagram.accept(sn.connectionInfo(), sn.schema());
+                    });
+                    menu.add(diagramItem);
+                    JMenuItem ddlItem = new JMenuItem("Export DDL", DbIcons.MENU_DDL);
+                    ddlItem.addActionListener(a -> {
+                        if (onExportDdl != null)
+                            onExportDdl.accept(sn.connectionInfo(), sn.schema());
+                    });
+                    menu.add(ddlItem);
+                    menu.show(tree, e.getX(), e.getY());
                 } else if (userObj instanceof ObjectNode on && on.isTable()) {
                     JPopupMenu menu = new JPopupMenu();
-                    JMenuItem viewData = new JMenuItem("View Data");
+
+                    JMenuItem viewData = new JMenuItem("View Data", DbIcons.MENU_VIEW_DATA);
                     viewData.addActionListener(a -> {
                         if (onViewData != null) {
-                            // Construct simple SELECT * query
                             String tableName = on.name;
                             String schema = on.schema;
                             String sql;
@@ -146,6 +171,36 @@ public class ConnectionListPanel extends JPanel {
                         }
                     });
                     menu.add(viewData);
+
+                    // Export submenu
+                    JMenu exportMenu = new JMenu("Export");
+                    exportMenu.setIcon(DbIcons.MENU_EXPORT);
+                    String tableKey = on.schema + "\0" + on.name;
+
+                    JMenuItem exportDdl = new JMenuItem("DDL", DbIcons.MENU_DDL);
+                    exportDdl.addActionListener(a -> {
+                        if (onExportTable != null) onExportTable.accept(on.connectionInfo, "DDL\0" + tableKey);
+                    });
+                    JMenuItem exportInsert = new JMenuItem("INSERT Statements", DbIcons.MENU_INSERT);
+                    exportInsert.addActionListener(a -> {
+                        if (onExportTable != null) onExportTable.accept(on.connectionInfo, "INSERT\0" + tableKey);
+                    });
+                    JMenuItem exportUpdate = new JMenuItem("Update SQL", DbIcons.MENU_UPDATE);
+                    exportUpdate.addActionListener(a -> {
+                        if (onExportTable != null) onExportTable.accept(on.connectionInfo, "UPDATE\0" + tableKey);
+                    });
+                    JMenuItem exportCsv = new JMenuItem("Export to CSV", DbIcons.MENU_CSV);
+                    exportCsv.addActionListener(a -> {
+                        if (onExportTable != null) onExportTable.accept(on.connectionInfo, "CSV\0" + tableKey);
+                    });
+
+                    exportMenu.add(exportDdl);
+                    exportMenu.add(exportInsert);
+                    exportMenu.add(exportUpdate);
+                    exportMenu.addSeparator();
+                    exportMenu.add(exportCsv);
+                    menu.add(exportMenu);
+
                     menu.show(tree, e.getX(), e.getY());
                 }
             }
@@ -181,6 +236,16 @@ public class ConnectionListPanel extends JPanel {
         tree.expandRow(0);
     }
 
+    // ── Connection resilience ─────────────────────────────────────────────────
+
+    /**
+     * Returns the active JDBC connection for {@code info}, or null if not connected.
+     * No network probe — purely a local map lookup.
+     */
+    private Connection getConnection(ConnectionInfo info) {
+        return connectionManager.getActiveConnection(info.getId());
+    }
+
     /** Called after a successful connect — populates schemas (or tables for DynamoDB) under the connection node. */
     public void loadSchemasForConnection(ConnectionInfo info) {
         DefaultMutableTreeNode connNode = findConnectionNode(info);
@@ -192,9 +257,6 @@ public class ConnectionListPanel extends JPanel {
             return;
         }
 
-        Connection conn = connectionManager.getActiveConnection(info.getId());
-        if (conn == null) return;
-
         // Show loading state
         connNode.removeAllChildren();
         connNode.add(new DefaultMutableTreeNode("Loading schemas..."));
@@ -204,6 +266,8 @@ public class ConnectionListPanel extends JPanel {
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() throws Exception {
+                Connection conn = getConnection(info);
+                if (conn == null) throw new java.sql.SQLException("Not connected");
                 return schemaExplorer.getSchemas(conn, info.getDbType());
             }
             @Override
@@ -217,7 +281,6 @@ public class ConnectionListPanel extends JPanel {
                         for (String schema : schemas) {
                             DefaultMutableTreeNode schemaNode = new DefaultMutableTreeNode(
                                     new SchemaNode(schema, info));
-                            // Add dummy so it's expandable
                             schemaNode.add(new DefaultMutableTreeNode("Loading..."));
                             connNode.add(schemaNode);
                         }
@@ -326,14 +389,6 @@ public class ConnectionListPanel extends JPanel {
     }
 
     private void loadObjectsForCategory(DefaultMutableTreeNode catNode, CategoryNode cn) {
-        Connection conn = connectionManager.getActiveConnection(cn.connectionInfo.getId());
-        if (conn == null) {
-            catNode.removeAllChildren();
-            catNode.add(new DefaultMutableTreeNode("(not connected)"));
-            treeModel.reload(catNode);
-            return;
-        }
-
         catNode.removeAllChildren();
         catNode.add(new DefaultMutableTreeNode("Loading..."));
         treeModel.reload(catNode);
@@ -341,15 +396,17 @@ public class ConnectionListPanel extends JPanel {
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() throws Exception {
+                Connection conn = getConnection(cn.connectionInfo);
+                if (conn == null) throw new java.sql.SQLException("Not connected");
                 DatabaseType dbType = cn.connectionInfo.getDbType();
                 return switch (cn.category) {
-                    case CAT_TABLES -> schemaExplorer.getTables(conn, dbType, cn.schema);
-                    case CAT_VIEWS -> schemaExplorer.getViews(conn, dbType, cn.schema);
+                    case CAT_TABLES    -> schemaExplorer.getTables(conn, dbType, cn.schema);
+                    case CAT_VIEWS     -> schemaExplorer.getViews(conn, dbType, cn.schema);
                     case CAT_SEQUENCES -> schemaExplorer.getSequences(conn, dbType, cn.schema);
-                    case CAT_INDEXES -> schemaExplorer.getIndexes(conn, dbType, cn.schema);
+                    case CAT_INDEXES   -> schemaExplorer.getIndexes(conn, dbType, cn.schema);
                     case CAT_FUNCTIONS -> schemaExplorer.getFunctions(conn, dbType, cn.schema);
-                    case CAT_PROCEDURES -> schemaExplorer.getProcedures(conn, dbType, cn.schema);
-                    default -> List.of();
+                    case CAT_PROCEDURES-> schemaExplorer.getProcedures(conn, dbType, cn.schema);
+                    default            -> List.of();
                 };
             }
             @Override
@@ -364,10 +421,7 @@ public class ConnectionListPanel extends JPanel {
                         for (String name : objects) {
                             DefaultMutableTreeNode objNode = new DefaultMutableTreeNode(
                                     new ObjectNode(name, cn.category, cn.schema, cn.connectionInfo));
-                            // Add dummy for columns if it's a table
-                            if (isTable) {
-                                objNode.add(new DefaultMutableTreeNode("Loading..."));
-                            }
+                            if (isTable) objNode.add(new DefaultMutableTreeNode("Loading..."));
                             catNode.add(objNode);
                         }
                     }
@@ -381,14 +435,6 @@ public class ConnectionListPanel extends JPanel {
     }
 
     private void loadColumnsForTable(DefaultMutableTreeNode tableNode, ObjectNode on) {
-        Connection conn = connectionManager.getActiveConnection(on.connectionInfo.getId());
-        if (conn == null) {
-            tableNode.removeAllChildren();
-            tableNode.add(new DefaultMutableTreeNode("(not connected)"));
-            treeModel.reload(tableNode);
-            return;
-        }
-
         tableNode.removeAllChildren();
         tableNode.add(new DefaultMutableTreeNode("Loading..."));
         treeModel.reload(tableNode);
@@ -396,7 +442,9 @@ public class ConnectionListPanel extends JPanel {
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() throws Exception {
-                 return schemaExplorer.getColumns(conn, on.connectionInfo.getDbType(), on.schema, on.name);
+                Connection conn = getConnection(on.connectionInfo);
+                if (conn == null) throw new java.sql.SQLException("Not connected");
+                return schemaExplorer.getColumns(conn, on.connectionInfo.getDbType(), on.schema, on.name);
             }
             @Override
             protected void done() {
@@ -450,6 +498,9 @@ public class ConnectionListPanel extends JPanel {
     public void setOnDelete(Consumer<ConnectionInfo> onDelete) { this.onDelete = onDelete; }
     public void setOnOpenQueryTab(Consumer<ConnectionInfo> onOpenQueryTab) { this.onOpenQueryTab = onOpenQueryTab; }
     public void setOnViewData(BiConsumer<ConnectionInfo, String> onViewData) { this.onViewData = onViewData; }
+    public void setOnShowDiagram(BiConsumer<ConnectionInfo, String> onShowDiagram) { this.onShowDiagram = onShowDiagram; }
+    public void setOnExportDdl(BiConsumer<ConnectionInfo, String> onExportDdl) { this.onExportDdl = onExportDdl; }
+    public void setOnExportTable(BiConsumer<ConnectionInfo, String> onExportTable) { this.onExportTable = onExportTable; }
 
     // --- Inner data classes for tree node user objects ---
 
@@ -486,6 +537,8 @@ public class ConnectionListPanel extends JPanel {
                     setIcon(DbIcons.DATABASE_DYNAMO);
                 } else if (info.getDbType() == DatabaseType.SQLITE) {
                     setIcon(DbIcons.DATABASE_SQLITE);
+                } else if (info.getDbType() == DatabaseType.GENERIC) {
+                    setIcon(DbIcons.DATABASE_GENERIC);
                 } else {
                     setIcon(connected ? DbIcons.DATABASE_CONNECTED : DbIcons.DATABASE_DISCONNECTED);
                 }

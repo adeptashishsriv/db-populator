@@ -90,6 +90,9 @@ public class ConnectionManager {
         copy.setAwsAccessKey(src.getAwsAccessKey());
         copy.setAwsSecretKey(src.getAwsSecretKey());
         copy.setAwsEndpoint(src.getAwsEndpoint());
+        copy.setCustomDriverClass(src.getCustomDriverClass());
+        copy.setCustomJdbcUrl(src.getCustomJdbcUrl());
+        copy.setCustomDriverJar(src.getCustomDriverJar());
         return copy;
     }
 
@@ -123,6 +126,11 @@ public class ConnectionManager {
             getDynamoDbExecutor().connect(info);
             return null;
         }
+        if (info.getDbType() == DatabaseType.GENERIC) {
+            Connection conn = connectGeneric(info);
+            activeConnections.put(info.getId(), conn);
+            return conn;
+        }
         try {
             Class.forName(info.getDbType().getDriverClass());
         } catch (ClassNotFoundException e) {
@@ -139,6 +147,49 @@ public class ConnectionManager {
         return conn;
     }
 
+    /**
+     * Connects using a user-supplied driver JAR + driver class + JDBC URL.
+     * The JAR is loaded via a URLClassLoader so it doesn't need to be on the
+     * application classpath — users just point to the file on disk.
+     */
+    private Connection connectGeneric(ConnectionInfo info) throws SQLException {
+        String driverClass = info.getCustomDriverClass();
+        String jdbcUrl     = info.getCustomJdbcUrl();
+        String jarPath     = info.getCustomDriverJar();
+
+        if (driverClass == null || driverClass.isBlank())
+            throw new SQLException("Driver class name is required for Generic JDBC connections.");
+        if (jdbcUrl == null || jdbcUrl.isBlank())
+            throw new SQLException("JDBC URL is required for Generic JDBC connections.");
+
+        try {
+            java.sql.Driver driver;
+            if (jarPath != null && !jarPath.isBlank()) {
+                // Load driver from external JAR
+                java.net.URL jarUrl = java.nio.file.Path.of(jarPath).toUri().toURL();
+                java.net.URLClassLoader loader = new java.net.URLClassLoader(
+                        new java.net.URL[]{jarUrl},
+                        Thread.currentThread().getContextClassLoader());
+                Class<?> driverClazz = Class.forName(driverClass, true, loader);
+                driver = (java.sql.Driver) driverClazz.getDeclaredConstructor().newInstance();
+            } else {
+                // Try the application classpath (driver may already be bundled)
+                driver = (java.sql.Driver) Class.forName(driverClass)
+                        .getDeclaredConstructor().newInstance();
+            }
+            java.util.Properties props = new java.util.Properties();
+            if (info.getUsername() != null && !info.getUsername().isBlank())
+                props.setProperty("user", info.getUsername());
+            if (info.getPassword() != null && !info.getPassword().isBlank())
+                props.setProperty("password", info.getPassword());
+            return driver.connect(jdbcUrl, props);
+        } catch (SQLException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SQLException("Failed to load Generic JDBC driver: " + e.getMessage(), e);
+        }
+    }
+
     public void disconnect(String id) {
         Connection conn = activeConnections.remove(id);
         if (conn != null) {
@@ -153,21 +204,28 @@ public class ConnectionManager {
         return activeConnections.get(id);
     }
 
+    /**
+     * Fast, EDT-safe liveness check — only inspects local state, never touches
+     * the network.  Uses isClosed() which is a local flag in the JDBC driver.
+     */
     public boolean isConnected(String id) {
-        // Check DynamoDB first
         if (dynamoDbExecutor != null && dynamoDbExecutor.isConnected(id)) return true;
-        // Then JDBC
         Connection conn = activeConnections.get(id);
         if (conn == null) return false;
         try {
-            return !conn.isClosed();
+            if (conn.isClosed()) { activeConnections.remove(id); return false; }
+            return true;
         } catch (SQLException e) {
-            activeConnections.remove(id);
-            return false;
+            activeConnections.remove(id); return false;
         }
     }
 
     public Connection testConnection(ConnectionInfo info) throws SQLException {
+        if (info.getDbType() == DatabaseType.GENERIC) {
+            Connection conn = connectGeneric(info);
+            conn.close();
+            return null;
+        }
         try {
             Class.forName(info.getDbType().getDriverClass());
         } catch (ClassNotFoundException e) {

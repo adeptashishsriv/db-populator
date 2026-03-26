@@ -49,10 +49,19 @@ public class ConnectionDialog extends JDialog {
     private final JPasswordField awsSecretKeyField = new JPasswordField(20);
     private final JTextField awsEndpointField = new JTextField(30);
 
+    // Generic JDBC fields
+    private final JTextField genericJdbcUrlField    = new JTextField("jdbc:vendor://host:port/database", 30);
+    private final JTextField genericDriverClassField = new JTextField("com.vendor.jdbc.Driver", 30);
+    private final JTextField genericDriverJarField   = new JTextField(30);
+    private final JButton    genericJarBrowseBtn     = new JButton("Browse…");
+    private final JTextField genericUsernameField    = new JTextField(20);
+    private final JPasswordField genericPasswordField = new JPasswordField(20);
+
     // Panels for toggling visibility
-    private final List<Component[]> jdbcRows = new ArrayList<>();
-    private final List<Component[]> sqliteRows = new ArrayList<>();
-    private final List<Component[]> dynamoRows = new ArrayList<>();
+    private final List<Component[]> jdbcRows    = new ArrayList<>();
+    private final List<Component[]> sqliteRows  = new ArrayList<>();
+    private final List<Component[]> dynamoRows  = new ArrayList<>();
+    private final List<Component[]> genericRows = new ArrayList<>();
     private JPanel formPanel;
 
     private final ConnectionManager connectionManager;
@@ -111,6 +120,23 @@ public class ConnectionDialog extends JDialog {
         addRow(formPanel, gbc, row++, "Secret Access Key:", awsSecretKeyField, dynamoRows);
         addRow(formPanel, gbc, row++, "Endpoint (optional):", awsEndpointField, dynamoRows);
 
+        // Generic JDBC rows
+        JPanel genericJarPanel = new JPanel(new BorderLayout(4, 0));
+        genericJarPanel.add(genericDriverJarField, BorderLayout.CENTER);
+        genericJarPanel.add(genericJarBrowseBtn, BorderLayout.EAST);
+        genericJarBrowseBtn.addActionListener(e -> {
+            JFileChooser fc = new JFileChooser();
+            fc.setDialogTitle("Select JDBC Driver JAR");
+            fc.setFileFilter(new FileNameExtensionFilter("JAR files (*.jar)", "jar"));
+            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
+                genericDriverJarField.setText(fc.getSelectedFile().getAbsolutePath());
+        });
+        addRow(formPanel, gbc, row++, "JDBC URL:", genericJdbcUrlField, genericRows);
+        addRow(formPanel, gbc, row++, "Driver Class:", genericDriverClassField, genericRows);
+        addRow(formPanel, gbc, row++, "Driver JAR (optional):", genericJarPanel, genericRows);
+        addRow(formPanel, gbc, row++, "Username:", genericUsernameField, genericRows);
+        addRow(formPanel, gbc, row++, "Password:", genericPasswordField, genericRows);
+
         // Toggle fields when DB type changes
         dbTypeCombo.addActionListener(e -> {
             toggleFieldVisibility();
@@ -154,12 +180,13 @@ public class ConnectionDialog extends JDialog {
 
     private void toggleFieldVisibility() {
         DatabaseType sel = (DatabaseType) dbTypeCombo.getSelectedItem();
-        boolean isDynamo = sel == DatabaseType.DYNAMODB;
-        boolean isSQLite = sel == DatabaseType.SQLITE;
+        boolean isDynamo  = sel == DatabaseType.DYNAMODB;
+        boolean isSQLite  = sel == DatabaseType.SQLITE;
+        boolean isGeneric = sel == DatabaseType.GENERIC;
 
         for (Component[] pair : jdbcRows) {
-            pair[0].setVisible(!isDynamo && !isSQLite);
-            pair[1].setVisible(!isDynamo && !isSQLite);
+            pair[0].setVisible(!isDynamo && !isSQLite && !isGeneric);
+            pair[1].setVisible(!isDynamo && !isSQLite && !isGeneric);
         }
         for (Component[] pair : sqliteRows) {
             pair[0].setVisible(isSQLite);
@@ -169,8 +196,12 @@ public class ConnectionDialog extends JDialog {
             pair[0].setVisible(isDynamo);
             pair[1].setVisible(isDynamo);
         }
+        for (Component[] pair : genericRows) {
+            pair[0].setVisible(isGeneric);
+            pair[1].setVisible(isGeneric);
+        }
 
-        if (!isDynamo && !isSQLite && sel != null) {
+        if (!isDynamo && !isSQLite && !isGeneric && sel != null) {
             portField.setText(String.valueOf(sel.getDefaultPort()));
         }
     }
@@ -180,6 +211,12 @@ public class ConnectionDialog extends JDialog {
         dbTypeCombo.setSelectedItem(info.getDbType());
         if (info.getDbType() == DatabaseType.SQLITE) {
             sqliteFileField.setText(info.getDatabase() != null ? info.getDatabase() : "");
+        } else if (info.getDbType() == DatabaseType.GENERIC) {
+            if (info.getCustomJdbcUrl()     != null) genericJdbcUrlField.setText(info.getCustomJdbcUrl());
+            if (info.getCustomDriverClass() != null) genericDriverClassField.setText(info.getCustomDriverClass());
+            if (info.getCustomDriverJar()   != null) genericDriverJarField.setText(info.getCustomDriverJar());
+            if (info.getUsername()          != null) genericUsernameField.setText(info.getUsername());
+            if (info.getPassword()          != null) genericPasswordField.setText(info.getPassword());
         } else {
             hostField.setText(info.getHost());
             portField.setText(String.valueOf(info.getPort()));
@@ -188,10 +225,10 @@ public class ConnectionDialog extends JDialog {
             passwordField.setText(info.getPassword());
             if (info.getDriverPath() != null) driverPathField.setText(info.getDriverPath());
         }
-        if (info.getAwsRegion() != null) awsRegionField.setText(info.getAwsRegion());
+        if (info.getAwsRegion()    != null) awsRegionField.setText(info.getAwsRegion());
         if (info.getAwsAccessKey() != null) awsAccessKeyField.setText(info.getAwsAccessKey());
         if (info.getAwsSecretKey() != null) awsSecretKeyField.setText(info.getAwsSecretKey());
-        if (info.getAwsEndpoint() != null) awsEndpointField.setText(info.getAwsEndpoint());
+        if (info.getAwsEndpoint()  != null) awsEndpointField.setText(info.getAwsEndpoint());
     }
 
     private ConnectionInfo buildFromFields() {
@@ -208,6 +245,13 @@ public class ConnectionDialog extends JDialog {
             info.setAwsEndpoint(ep.isEmpty() ? null : ep);
         } else if (dbType == DatabaseType.SQLITE) {
             info.setDatabase(sqliteFileField.getText().trim());
+        } else if (dbType == DatabaseType.GENERIC) {
+            info.setCustomJdbcUrl(genericJdbcUrlField.getText().trim());
+            info.setCustomDriverClass(genericDriverClassField.getText().trim());
+            String jar = genericDriverJarField.getText().trim();
+            info.setCustomDriverJar(jar.isEmpty() ? null : jar);
+            info.setUsername(genericUsernameField.getText().trim());
+            info.setPassword(new String(genericPasswordField.getPassword()));
         } else {
             info.setHost(hostField.getText().trim());
             info.setPort(Integer.parseInt(portField.getText().trim()));
@@ -246,6 +290,16 @@ public class ConnectionDialog extends JDialog {
         if (sel == DatabaseType.SQLITE && sqliteFileField.getText().trim().isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please select a SQLite database file.");
             return;
+        }
+        if (sel == DatabaseType.GENERIC) {
+            if (genericJdbcUrlField.getText().trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this, "JDBC URL is required.");
+                return;
+            }
+            if (genericDriverClassField.getText().trim().isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Driver class name is required.");
+                return;
+            }
         }
         try {
             result = buildFromFields();
