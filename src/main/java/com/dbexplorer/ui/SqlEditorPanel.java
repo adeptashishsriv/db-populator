@@ -1,20 +1,44 @@
 package com.dbexplorer.ui;
 
-import com.dbexplorer.model.ConnectionInfo;
-import com.dbexplorer.service.ConnectionManager;
-import com.dbexplorer.service.QueryExecutor;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.RenderingHints;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.util.HashMap;
+import java.util.Map;
 
-import javax.swing.*;
+import javax.swing.AbstractAction;
+import javax.swing.Icon;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextPane;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.UndoableEditEvent;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.JTextComponent;
 import javax.swing.undo.UndoManager;
-import java.awt.*;
-import java.awt.event.InputEvent;
-import java.awt.event.KeyEvent;
-import java.util.HashMap;
-import java.util.Map;
+
+import com.dbexplorer.model.ConnectionInfo;
+import com.dbexplorer.service.ConnectionManager;
+import com.dbexplorer.service.QueryExecutor;
 
 /**
  * Multi-tab SQL editor panel. Each tab is a vertical split: editor on top,
@@ -65,6 +89,14 @@ public class SqlEditorPanel extends JPanel {
 
         // Show welcome when all tabs are closed
         tabbedPane.addChangeListener(e -> checkEmpty());
+
+        // When theme changes, force the tabbedPane and all its tab header components
+        // to pick up the new UIManager colors — prevents stale tab backgrounds
+        ThemeManager.addThemeChangeListener(() -> SwingUtilities.invokeLater(() -> {
+            SwingUtilities.updateComponentTreeUI(tabbedPane);
+            tabbedPane.revalidate();
+            tabbedPane.repaint();
+        }));
     }
 
     public void setOnRunQuery(Runnable onRunQuery) { this.onRunQuery = onRunQuery; }

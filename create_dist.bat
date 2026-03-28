@@ -29,20 +29,23 @@ mkdir dist
 echo.
 echo [3/3] Copying files...
 REM Copy the Uber-JAR
-if exist target\db-explorer-1.0.0.jar (
-    copy target\db-explorer-1.0.0.jar dist\
+if exist target\db-explorer-2.1.0.jar (
+    copy target\db-explorer-2.1.0.jar dist\
 ) else (
-    echo Error: Target JAR not found!
+    echo Error: Target JAR not found at target\db-explorer-2.1.0.jar
     pause
     exit /b 1
 )
 
 REM Copy Documentation
 if exist USER_HANDBOOK.md copy USER_HANDBOOK.md dist\
+if exist USER_HANDBOOK.pdf copy USER_HANDBOOK.pdf dist\
+if exist RELEASE_NOTES.md copy RELEASE_NOTES.md dist\
+if exist LICENSE_AGREEMENT.txt copy LICENSE_AGREEMENT.txt dist\
 
 REM Create a handy run script for the end user
 echo @echo off > dist\db-explorer.bat
-echo start javaw -jar db-explorer-1.0.0.jar >> dist\db-explorer.bat
+echo start javaw -jar db-explorer-2.1.0.jar >> dist\db-explorer.bat
 
 echo.
 echo ==========================================

@@ -57,6 +57,7 @@ public final class DbIcons {
     public static final Icon TB_ADD        = px(TB, DbIcons::tbAdd);
     public static final Icon TB_DISCONNECT = px(TB, DbIcons::tbDisconnect);
     public static final Icon TB_RUN        = px(TB, DbIcons::tbRun);
+    public static final Icon TB_CANCEL     = px(TB, DbIcons::tbCancel);
     public static final Icon TB_NEW_TAB    = px(TB, DbIcons::tbNewTab);
     public static final Icon TB_EXPLAIN    = px(TB, DbIcons::tbExplain);
     public static final Icon TB_CLEAR      = px(TB, DbIcons::tbClear);
@@ -302,6 +303,15 @@ public final class DbIcons {
         g.setColor(C_WHITE);
         int[] px={6,6,s-4}, py={4,s-4,s/2};
         g.fillPolygon(px, py, 3);
+    }
+
+    static void tbCancel(Graphics2D g, int s) {
+        // red circle + white filled square (stop symbol)
+        g.setColor(C_RED);
+        g.fillOval(1, 1, s-2, s-2);
+        g.setColor(C_WHITE);
+        int sq = s / 3;
+        g.fillRect(s/2 - sq/2, s/2 - sq/2, sq, sq);
     }
 
     static void tbNewTab(Graphics2D g, int s) {

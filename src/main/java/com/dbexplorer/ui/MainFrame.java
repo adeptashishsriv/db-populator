@@ -20,6 +20,7 @@ import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.JToolBar;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 
 import com.dbexplorer.health.DashboardConfig;
 import com.dbexplorer.health.HealthCollector;
@@ -47,7 +48,12 @@ public class MainFrame extends JFrame {
     private JSplitPane outerSplit;
     private JButton dashboardBtn;
 
+    // Heap indicator in status bar
+    private final JLabel heapLabel = new JLabel();
+    private javax.swing.Timer heapTimer;
+
     private JButton newTabBtn;
+    private JButton cancelBtn;
     private ThemeAnimationOverlay animationOverlay;
 
     public MainFrame() {
@@ -119,6 +125,12 @@ public class MainFrame extends JFrame {
         statusLabel.setFont(statusLabel.getFont().deriveFont(Font.PLAIN, 11f));
         statusBar.add(statusLabel, BorderLayout.WEST);
 
+        // Heap indicator — right corner of status bar
+        heapLabel.setFont(heapLabel.getFont().deriveFont(Font.PLAIN, 11f));
+        heapLabel.setToolTipText("JVM Heap: used / committed / max");
+        updateHeapLabel();
+        statusBar.add(heapLabel, BorderLayout.EAST);
+
         add(mainSplit, BorderLayout.CENTER);
         add(statusBar, BorderLayout.SOUTH);
 
@@ -147,6 +159,10 @@ public class MainFrame extends JFrame {
         JButton runBtn = makeToolButton("Run Query (Ctrl+Enter)", DbIcons.TB_RUN);
         runBtn.addActionListener(e -> runQuery());
 
+        cancelBtn = makeToolButton("Cancel Running Query", DbIcons.TB_CANCEL);
+        cancelBtn.setEnabled(false);
+        cancelBtn.addActionListener(e -> cancelQuery());
+
         newTabBtn = makeToolButton("New Tab", DbIcons.TB_NEW_TAB);
         newTabBtn.addActionListener(e -> openNewTabWithSelectedConnection());
         newTabBtn.setEnabled(false);
@@ -174,7 +190,8 @@ public class MainFrame extends JFrame {
                 ThemeAnimationOverlay.AnimationType anim =
                         ThemeAnimationOverlay.animationFor(selected);
                 ThemeManager.applyTheme(selected);
-                SwingUtilities.updateComponentTreeUI(this);
+                // ThemeManager already calls updateComponentTreeUI on all windows.
+                // Re-set the glass pane since updateComponentTreeUI replaces it.
                 setGlassPane(animationOverlay);
                 animationOverlay.setBounds(0, 0, getWidth(), getHeight());
                 if (anim != ThemeAnimationOverlay.AnimationType.NONE) {
@@ -187,6 +204,7 @@ public class MainFrame extends JFrame {
         toolbar.add(disconnectBtn);
         toolbar.addSeparator();
         toolbar.add(runBtn);
+        toolbar.add(cancelBtn);
         toolbar.add(newTabBtn);
         toolbar.add(explainBtn);
         toolbar.addSeparator();
@@ -249,9 +267,16 @@ public class MainFrame extends JFrame {
 
     private void initWindowBehavior() {
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+
+        // Update heap label every 2 seconds
+        heapTimer = new javax.swing.Timer(2000, e -> updateHeapLabel());
+        heapTimer.setInitialDelay(0);
+        heapTimer.start();
+
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
+                heapTimer.stop();
                 healthCollector.stop();
                 queryExecutor.shutdown();
                 connectionManager.disconnectAll();
@@ -259,6 +284,29 @@ public class MainFrame extends JFrame {
                 System.exit(0);
             }
         });
+    }
+
+    private void updateHeapLabel() {
+        java.lang.management.MemoryUsage mem =
+            java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+        long used      = mem.getUsed()      / (1024 * 1024);
+        long committed = mem.getCommitted() / (1024 * 1024);
+        long max       = mem.getMax()       / (1024 * 1024);
+        int pct = max > 0 ? (int)(mem.getUsed() * 100L / mem.getMax()) : 0;
+
+        String text = String.format("Heap: %d MB / %d MB  (%d%%)", used, max, pct);
+        heapLabel.setText(text);
+
+        // Color: amber above 70%, red above 90%
+        if (pct > 90) {
+            heapLabel.setForeground(new Color(0xEF, 0x44, 0x44));
+        } else if (pct > 70) {
+            heapLabel.setForeground(new Color(0xF5, 0x9E, 0x0B));
+        } else {
+            heapLabel.setForeground(UIManager.getColor("Label.foreground"));
+        }
+        heapLabel.setToolTipText(String.format(
+            "Used: %d MB  |  Allocated: %d MB  |  Max: %d MB", used, committed, max));
     }
 
     // --- Dashboard toggle ---
@@ -610,8 +658,10 @@ public class MainFrame extends JFrame {
                 + sql.trim().replaceAll("\\s+", " "));
         rp.showLoading();
 
+        cancelBtn.setEnabled(true);
         queryExecutor.executeAsync(conn, sql,
                 (LazyQueryResult lazyResult) -> SwingUtilities.invokeLater(() -> {
+                    cancelBtn.setEnabled(false);
                     rp.hideLoading();
                     rp.displayLazyResult(lazyResult);
                     logPanel.logQuery(sql, lazyResult.getExecutionTimeMs());
@@ -621,6 +671,7 @@ public class MainFrame extends JFrame {
                             + " | " + tabConn.getName());
                 }),
                 (QueryResult result) -> SwingUtilities.invokeLater(() -> {
+                    cancelBtn.setEnabled(false);
                     rp.hideLoading();
                     rp.displayResult(result);
                     logPanel.logQuery(sql, result.executionTimeMs());
@@ -628,12 +679,26 @@ public class MainFrame extends JFrame {
                             + result.executionTimeMs() + " ms | " + tabConn.getName());
                 }),
                 (SQLException ex) -> SwingUtilities.invokeLater(() -> {
+                    cancelBtn.setEnabled(false);
                     rp.hideLoading();
-                    String errTitle = "SQL Error [" + ex.getErrorCode() + "]";
-                    rp.displayError(errTitle, ex.getMessage());
-                    logPanel.logError(errTitle + " "
-                            + ex.getSQLState() + ": " + ex.getMessage(), ex);
-                    statusLabel.setText("Query failed | " + tabConn.getName());
+                    if (isTimeoutException(ex) && !isCancelException(ex)) {
+                        rp.displayError("Query timed out",
+                                "The query exceeded the " + com.dbexplorer.service.QueryExecutor.QUERY_TIMEOUT_SECONDS
+                                + "s timeout and was cancelled automatically.");
+                        logPanel.logInfo("Query timed out after "
+                                + com.dbexplorer.service.QueryExecutor.QUERY_TIMEOUT_SECONDS + "s.");
+                        statusLabel.setText("Query timed out | " + tabConn.getName());
+                    } else if (isCancelException(ex)) {
+                        rp.displayError("Query cancelled", "The query was cancelled by the user.");
+                        logPanel.logInfo("Query cancelled by user.");
+                        statusLabel.setText("Query cancelled | " + tabConn.getName());
+                    } else {
+                        String errTitle = "SQL Error [" + ex.getErrorCode() + "]";
+                        rp.displayError(errTitle, ex.getMessage());
+                        logPanel.logError(errTitle + " "
+                                + ex.getSQLState() + ": " + ex.getMessage(), ex);
+                        statusLabel.setText("Query failed | " + tabConn.getName());
+                    }
                 })
         );
     }
@@ -710,6 +775,24 @@ public class MainFrame extends JFrame {
                     statusLabel.setText("Explain failed | " + tabConn.getName());
                 })
         );
+    }
+
+    private void cancelQuery() {
+        queryExecutor.cancelCurrent();
+        cancelBtn.setEnabled(false);
+        logPanel.logInfo("Cancel requested.");
+    }
+
+    private static boolean isCancelException(SQLException ex) {
+        String state = ex.getSQLState();
+        String msg   = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+        return "57014".equals(state) || msg.contains("cancel") || msg.contains("interrupt");
+    }
+
+    private static boolean isTimeoutException(SQLException ex) {
+        return ex instanceof java.sql.SQLTimeoutException
+                || "57014".equals(ex.getSQLState())
+                || (ex.getMessage() != null && ex.getMessage().toLowerCase().contains("timeout"));
     }
 
     private void updateStatus() {

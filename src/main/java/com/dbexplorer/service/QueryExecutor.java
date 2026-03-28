@@ -1,15 +1,29 @@
 package com.dbexplorer.service;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+
 import com.dbexplorer.model.DatabaseType;
 import com.dbexplorer.model.LazyQueryResult;
 import com.dbexplorer.model.QueryResult;
 
-import java.sql.*;
-import java.util.List;
-import java.util.concurrent.*;
-import java.util.function.Consumer;
-
 public class QueryExecutor {
+
+    /** Query timeout in seconds. Throws SQLTimeoutException if the DB doesn't respond in time. */
+    public static final int QUERY_TIMEOUT_SECONDS = 30;
+
+    private final AtomicReference<Statement> activeStatement = new AtomicReference<>();
 
     private final ExecutorService executor = new ThreadPoolExecutor(
             2, 8, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(50),
@@ -33,13 +47,16 @@ public class QueryExecutor {
                                   Consumer<QueryResult> onSuccess,
                                   Consumer<SQLException> onError) {
         return executor.submit(() -> {
+            Statement stmt = null;
             try {
                 long start = System.currentTimeMillis();
                 // TYPE_FORWARD_ONLY + CONCUR_READ_ONLY lets the driver stream rows
-                Statement stmt = connection.createStatement(
+                stmt = connection.createStatement(
                         ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
                 stmt.setFetchSize(LazyQueryResult.DEFAULT_FETCH_SIZE);
                 stmt.setFetchDirection(ResultSet.FETCH_FORWARD);
+                stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                activeStatement.set(stmt);
                 boolean hasResultSet = stmt.execute(sql);
                 long elapsed = System.currentTimeMillis() - start;
 
@@ -57,6 +74,8 @@ public class QueryExecutor {
                 }
             } catch (SQLException e) {
                 onError.accept(e);
+            } finally {
+                activeStatement.set(null);
             }
         });
     }
@@ -165,5 +184,16 @@ public class QueryExecutor {
 
     public void shutdown() {
         executor.shutdownNow();
+    }
+
+    /**
+     * Cancels the currently executing JDBC Statement, if any.
+     * Safe to call from any thread. No-op if no statement is active.
+     */
+    public void cancelCurrent() {
+        Statement stmt = activeStatement.get();
+        if (stmt != null) {
+            try { stmt.cancel(); } catch (SQLException ignored) {}
+        }
     }
 }
