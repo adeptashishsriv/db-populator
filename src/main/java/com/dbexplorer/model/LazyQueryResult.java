@@ -31,8 +31,12 @@ public class LazyQueryResult implements AutoCloseable {
     private final int            columnCount;
     private final long           executionTimeMs;
 
-    // Accumulated rows — stored as String arrays for minimal heap overhead
-    private final List<String[]> fetchedRows = new ArrayList<>(DEFAULT_FETCH_SIZE * 2);
+    // Accumulated rows — NOT stored here after being handed to the UI.
+    // We only track the count for status display purposes.
+    private int fetchedRowCount = 0;
+
+    // First page is stored temporarily until ResultPanel reads it, then cleared.
+    private List<String[]> firstPage = null;
 
     // Max observed string length per column — used for fast column sizing
     private final int[]  maxColWidth;
@@ -64,15 +68,17 @@ public class LazyQueryResult implements AutoCloseable {
     public List<String>  getColumns()         { return columns; }
     public long          getExecutionTimeMs()  { return executionTimeMs; }
     public boolean       isExhausted()         { return exhausted; }
-    public int           getFetchedRowCount()  { return fetchedRows.size(); }
+    public int           getFetchedRowCount()  { return fetchedRowCount; }
     public int[]         getMaxColWidths()     { return maxColWidth; }
 
     /**
-     * Returns a snapshot of all fetched rows as String arrays.
-     * Safe to read from the EDT after a page fetch completes.
+     * Returns the first page of rows and clears the reference so it can be GC'd.
+     * Returns empty list if already consumed.
      */
-    public List<String[]> getFetchedRows() {
-        return Collections.unmodifiableList(fetchedRows);
+    public List<String[]> takeFirstPage() {
+        List<String[]> page = firstPage;
+        firstPage = null; // release reference immediately
+        return page != null ? page : List.of();
     }
 
     /**
@@ -101,7 +107,8 @@ public class LazyQueryResult implements AutoCloseable {
         }
 
         if (count < fetchSize) exhausted = true;
-        fetchedRows.addAll(page);
+        fetchedRowCount += page.size();
+        if (firstPage == null) firstPage = page; // store only the first page
         return page;
     }
 

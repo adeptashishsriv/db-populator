@@ -21,7 +21,7 @@ import com.dbexplorer.model.QueryResult;
 public class QueryExecutor {
 
     /** Query timeout in seconds. Throws SQLTimeoutException if the DB doesn't respond in time. */
-    public static final int QUERY_TIMEOUT_SECONDS = 30;
+    public static final int QUERY_TIMEOUT_SECONDS = 180;
 
     private final AtomicReference<Statement> activeStatement = new AtomicReference<>();
 
@@ -65,6 +65,7 @@ public class QueryExecutor {
                     LazyQueryResult lazy = new LazyQueryResult(stmt, rs, elapsed);
                     // Pre-fetch first page on this background thread so the EDT
                     // can render rows immediately without a second async hop.
+                    // The page is stored in lazy.takeFirstPage() for ResultPanel to consume.
                     lazy.fetchNextPage();
                     onLazyResult.accept(lazy);
                 } else {

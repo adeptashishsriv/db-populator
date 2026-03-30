@@ -139,7 +139,6 @@ public class MainFrame extends JFrame {
         outerSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, mainSplit, dashboardPanel);
         outerSplit.setResizeWeight(1.0);
         outerSplit.setDividerSize(0);
-        outerSplit.setEnabled(false);
         remove(mainSplit);
         add(outerSplit, BorderLayout.CENTER);
     }
@@ -333,7 +332,6 @@ public class MainFrame extends JFrame {
         } else {
             dashboardPanel.setVisible(false);
             outerSplit.setDividerSize(0);
-            outerSplit.setEnabled(false);
             healthCollector.stop();
             if (info != null) {
                 dashboardConfig.setEnabledFor(info.getId(), false);

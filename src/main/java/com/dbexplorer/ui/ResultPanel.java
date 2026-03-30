@@ -1,15 +1,26 @@
 package com.dbexplorer.ui;
 
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.event.AdjustmentEvent;
+import java.util.List;
+
+import javax.swing.BorderFactory;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JProgressBar;
+import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumnModel;
+
 import com.dbexplorer.model.LazyQueryResult;
 import com.dbexplorer.model.QueryResult;
 import com.dbexplorer.service.QueryExecutor;
-
-import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableColumnModel;
-import java.awt.*;
-import java.awt.event.AdjustmentEvent;
-import java.util.List;
 
 /**
  * Displays query results in a JTable with lazy loading.
@@ -102,17 +113,34 @@ public class ResultPanel extends JPanel {
         closeLazyResult();
         this.currentLazyResult = lazyResult;
 
-        // Snapshot the already-fetched first page before switching to EDT
-        List<String[]> firstPage = new java.util.ArrayList<>(lazyResult.getFetchedRows());
+        // Take the first page (pre-fetched by QueryExecutor) and clear the reference
+        List<String[]> firstPage = lazyResult.takeFirstPage();
         int[] colWidths = lazyResult.getMaxColWidths().clone();
 
         SwingUtilities.invokeLater(() -> {
-            // Reset table
             tableModel.setRowCount(0);
             tableModel.setColumnCount(0);
             for (String col : lazyResult.getColumns()) tableModel.addColumn(col);
+            appendPageToTable(firstPage);
+            applyColumnWidths(colWidths);
+            updateStatusLabel();
+        });
+    }
 
-            // Render first page immediately — no second async round-trip
+    /**
+     * Called from the background thread with the first page already fetched.
+     * Replaces displayLazyResult to avoid re-fetching.
+     */
+    public void displayLazyResultWithFirstPage(LazyQueryResult lazyResult, List<String[]> firstPage) {
+        closeLazyResult();
+        this.currentLazyResult = lazyResult;
+
+        int[] colWidths = lazyResult.getMaxColWidths().clone();
+
+        SwingUtilities.invokeLater(() -> {
+            tableModel.setRowCount(0);
+            tableModel.setColumnCount(0);
+            for (String col : lazyResult.getColumns()) tableModel.addColumn(col);
             appendPageToTable(firstPage);
             applyColumnWidths(colWidths);
             updateStatusLabel();
@@ -208,14 +236,22 @@ public class ResultPanel extends JPanel {
         );
     }
 
+    // Max rows to keep in the table model at once — prevents OOM on huge result sets
+    private static final int MAX_TABLE_ROWS = 10_000;
+
     /**
      * Batch-insert a page of String[] rows into the table model.
      * Fires a single tableRowsInserted event for the whole batch instead of
      * one event per row — dramatically faster for 500-row pages.
+     * Trims oldest rows if the total exceeds MAX_TABLE_ROWS.
      */
     private void appendPageToTable(List<String[]> page) {
         if (page.isEmpty()) return;
         for (String[] row : page) tableModel.addRow(row);
+        // Trim from the top if we exceed the cap
+        while (tableModel.getRowCount() > MAX_TABLE_ROWS) {
+            tableModel.removeRow(0);
+        }
     }
 
     /**
