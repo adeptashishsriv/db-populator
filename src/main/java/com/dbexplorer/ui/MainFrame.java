@@ -51,6 +51,7 @@ public class MainFrame extends JFrame {
 
     // Heap indicator in status bar
     private final JLabel heapLabel = new JLabel();
+    private JButton gcButton;
     private javax.swing.Timer heapTimer;
 
     private JButton newTabBtn;
@@ -130,7 +131,39 @@ public class MainFrame extends JFrame {
         heapLabel.setFont(heapLabel.getFont().deriveFont(Font.PLAIN, 11f));
         heapLabel.setToolTipText("JVM Heap: used / committed / max");
         updateHeapLabel();
-        statusBar.add(heapLabel, BorderLayout.EAST);
+        
+        // Garbage collection button — next to heap label
+        gcButton = new JButton("🗑");
+        gcButton.setFont(gcButton.getFont().deriveFont(Font.PLAIN, 10f));
+        gcButton.setToolTipText("Force Garbage Collection");
+        gcButton.setFocusable(false);
+        gcButton.setBorderPainted(false);
+        gcButton.setContentAreaFilled(false);
+        gcButton.setOpaque(false);
+        gcButton.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        gcButton.setMargin(new java.awt.Insets(0, 4, 0, 4));
+        gcButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseEntered(java.awt.event.MouseEvent e) {
+                gcButton.setContentAreaFilled(true);
+                gcButton.setOpaque(true);
+            }
+            @Override public void mouseExited(java.awt.event.MouseEvent e) {
+                gcButton.setContentAreaFilled(false);
+                gcButton.setOpaque(false);
+            }
+        });
+        gcButton.addActionListener(e -> {
+            System.gc();
+            updateHeapLabel();
+            logPanel.logInfo("Garbage collection requested.");
+        });
+        
+        // Create a panel for the right side with heap label and GC button
+        JPanel rightPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 0));
+        rightPanel.setOpaque(false);
+        rightPanel.add(gcButton);
+        rightPanel.add(heapLabel);
+        statusBar.add(rightPanel, BorderLayout.EAST);
 
         add(mainSplit, BorderLayout.CENTER);
         add(statusBar, BorderLayout.SOUTH);
@@ -153,11 +186,65 @@ public class MainFrame extends JFrame {
         addBtn.addActionListener(e -> showAddConnectionDialog());
 
         JButton disconnectBtn = makeToolButton("Disconnect DB", DbIcons.TB_DISCONNECT);
-        disconnectBtn.setToolTipText("Disconnect selected connection (tabs keep their binding)");
-        disconnectBtn.addActionListener(e -> disconnectSelectedConnection());
+        disconnectBtn.setToolTipText(
+            "<html>Disconnect selected connection<br/>" +
+            "<small>Tabs keep their binding; reconnect anytime</small></html>");
+        disconnectBtn.addActionListener(e -> {
+            ConnectionInfo conn = connectionListPanel.getSelectedConnection();
+            if (conn == null) conn = sqlEditorPanel.getActiveTabConnection();
+            
+            if (conn == null) {
+                JOptionPane.showMessageDialog(this,
+                    "No connection selected.\nSelect a connection and try again.",
+                    "No Connection", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            
+            if (!connectionManager.isConnected(conn.getId())) {
+                JOptionPane.showMessageDialog(this,
+                    conn.getName() + " is already disconnected.",
+                    "Already Disconnected", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            
+            int confirm = JOptionPane.showConfirmDialog(this,
+                "<html>Disconnect from <b>" + conn.getName() + "</b>?<br/>" +
+                "<small>Open query tabs will remain bound to this connection.</small></html>",
+                "Confirm Disconnect", JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+            
+            if (confirm == JOptionPane.YES_OPTION) {
+                disconnectSelectedConnection();
+                JOptionPane.showMessageDialog(this,
+                    "Disconnected from " + conn.getName(),
+                    "Disconnected", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
 
-        JButton runBtn = makeToolButton("Run Query (Ctrl+Enter)", DbIcons.TB_RUN);
-        runBtn.addActionListener(e -> runQuery());
+        JButton runBtn = makeToolButton("Run Query", DbIcons.TB_RUN);
+        runBtn.setToolTipText(
+            "<html>Execute the current query<br/>" +
+            "<small>Keyboard: Ctrl+Enter</small></html>");
+        runBtn.addActionListener(e -> {
+            SqlEditorPanel.TabState ts = sqlEditorPanel.getActiveTabState();
+            if (ts == null) {
+                showStatusMessage("No tab open", "error");
+                return;
+            }
+            
+            if (ts.connectionInfo == null) {
+                showStatusMessage("No connection on this tab", "warning");
+                return;
+            }
+            
+            String sql = sqlEditorPanel.getActiveSQL();
+            if (sql == null || sql.isBlank()) {
+                showStatusMessage("SQL editor is empty", "warning");
+                return;
+            }
+            
+            runQuery();
+        });
 
         cancelBtn = makeToolButton("Cancel Running Query", DbIcons.TB_CANCEL);
         cancelBtn.setEnabled(false);
@@ -821,6 +908,33 @@ public class MainFrame extends JFrame {
         } else {
             statusLabel.setText("No connection on this tab");
         }
+    }
+
+    /**
+     * Shows a temporary status message in the status bar with color coding.
+     * Auto-clears after 5 seconds.
+     */
+    private void showStatusMessage(String message, String type) {
+        Color originalColor = statusLabel.getForeground();
+        
+        if ("error".equals(type)) {
+            statusLabel.setForeground(new Color(0xEF, 0x44, 0x44)); // Red
+            statusLabel.setText("⚠ " + message);
+        } else if ("warning".equals(type)) {
+            statusLabel.setForeground(new Color(0xF5, 0x9E, 0x0B)); // Amber
+            statusLabel.setText("⚡ " + message);
+        } else {
+            statusLabel.setForeground(new Color(0x22, 0xC5, 0x5E)); // Green
+            statusLabel.setText("✓ " + message);
+        }
+        
+        // Auto-clear after 5 seconds
+        javax.swing.Timer clearTimer = new javax.swing.Timer(5000, e -> {
+            statusLabel.setForeground(originalColor);
+            updateStatus();
+        });
+        clearTimer.setRepeats(false);
+        clearTimer.start();
     }
 
     /** Extract a user-friendly message from an exception, unwrapping common wrappers. */

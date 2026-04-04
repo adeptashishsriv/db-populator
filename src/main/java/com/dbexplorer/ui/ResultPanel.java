@@ -225,6 +225,20 @@ public class ResultPanel extends JPanel {
         });
     }
 
+    /**
+     * Forcefully clears all accumulated data structures to aid garbage collection.
+     * Use this when running large queries in sequence or to prevent memory buildup.
+     */
+    public void forceGarbageCollection() {
+        closeLazyResult();
+        SwingUtilities.invokeLater(() -> {
+            tableModel.resetSort();
+            tableModel.setRowCount(0);
+            tableModel.setColumnCount(0);
+            columnWidthsApplied = false;
+        });
+    }
+
     // ── Scroll-triggered lazy fetch ───────────────────────────────────────────
 
     private void onScroll(AdjustmentEvent e) {
@@ -293,15 +307,21 @@ public class ResultPanel extends JPanel {
     private void updateStatusLabel() {
         if (currentLazyResult == null) return;
         int count = currentLazyResult.getFetchedRowCount();
-        String suffix = currentLazyResult.isExhausted()
-                ? " (all rows loaded)"
-                : " (scroll down for more)";
+        String suffix;
+        if (currentLazyResult.isTruncated()) {
+            suffix = " (truncated at " + LazyQueryResult.MAX_ROWS + " rows for memory safety)";
+        } else if (currentLazyResult.isExhausted()) {
+            suffix = " (all rows loaded)";
+        } else {
+            suffix = " (scroll down for more)";
+        }
         statusLabel.setText(count + " row(s) loaded in "
                 + currentLazyResult.getExecutionTimeMs() + " ms" + suffix);
     }
 
     private void closeLazyResult() {
         if (currentLazyResult != null) {
+            currentLazyResult.clearData();  // Clear internal structures to aid GC
             currentLazyResult.close();
             currentLazyResult = null;
         }
