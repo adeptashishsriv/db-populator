@@ -309,4 +309,16 @@ public class SortableTableModel extends AbstractTableModel {
         }
         fireTableDataChanged();
     }
+
+    /**
+     * Clears all data from the table model to free memory.
+     * Call this when the result panel is being closed or reset.
+     */
+    public void clearData() {
+        rows.clear();
+        sortIndex = new ArrayList<>();
+        sortedColumn = -1;
+        sortState = UNSORTED;
+        fireTableDataChanged();
+    }
 }

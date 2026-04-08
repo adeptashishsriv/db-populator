@@ -9,18 +9,7 @@ import java.awt.event.WindowEvent;
 import java.sql.Connection;
 import java.sql.SQLException;
 
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JSplitPane;
-import javax.swing.JToolBar;
-import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
+import javax.swing.*;
 
 import com.dbexplorer.health.DashboardConfig;
 import com.dbexplorer.health.HealthCollector;
@@ -28,10 +17,8 @@ import com.dbexplorer.model.ConnectionInfo;
 import com.dbexplorer.model.DatabaseType;
 import com.dbexplorer.model.LazyQueryResult;
 import com.dbexplorer.model.QueryResult;
-import com.dbexplorer.service.ConnectionManager;
-import com.dbexplorer.service.DdlExportService;
-import com.dbexplorer.service.DynamoDbExecutor;
-import com.dbexplorer.service.QueryExecutor;
+import com.dbexplorer.service.*;
+
 public class MainFrame extends JFrame {
 
     private final ConnectionManager connectionManager;
@@ -48,6 +35,11 @@ public class MainFrame extends JFrame {
     private DashboardPanel dashboardPanel;
     private JSplitPane outerSplit;
     private JButton dashboardBtn;
+    
+    // AI Assistant
+    private AIAssistantPanel aiAssistantPanel;
+    private JDialog aiAssistantDialog;
+    private AIConfigManager aiConfigManager;
 
     // Heap indicator in status bar
     private final JLabel heapLabel = new JLabel();
@@ -74,6 +66,9 @@ public class MainFrame extends JFrame {
         dashboardConfig  = DashboardConfig.load();
         healthCollector  = new HealthCollector();
         dashboardPanel   = new DashboardPanel(healthCollector, dashboardConfig);
+        
+        // AI Assistant configuration
+        aiConfigManager = new AIConfigManager();
 
         initLayout();
         initToolbar();
@@ -300,6 +295,13 @@ public class MainFrame extends JFrame {
         dashboardBtn = makeToolButton("Toggle Health Dashboard", DbIcons.TB_DASHBOARD);
         dashboardBtn.addActionListener(e -> toggleDashboard());
         toolbar.add(dashboardBtn);
+
+        JButton aiBtn = makeToolButton("AI SQL Assistant", null);
+        aiBtn.setText("🤖"); // AI icon emoji matching AIAssistantPanel header
+        aiBtn.setFont(aiBtn.getFont().deriveFont(14f)); // Slightly larger for visibility
+        aiBtn.addActionListener(e -> openAIAssistant());
+        toolbar.add(aiBtn);
+        
         toolbar.add(Box.createHorizontalGlue());
         toolbar.add(new JLabel("Theme: "));
         toolbar.add(themeCombo);
@@ -310,6 +312,22 @@ public class MainFrame extends JFrame {
         toolbar.add(aboutBtn);
 
         add(toolbar, BorderLayout.NORTH);
+        
+        // Create menu bar
+        createMenuBar();
+    }
+    
+    private void createMenuBar() {
+        JMenuBar menuBar = new JMenuBar();
+        
+        // Edit menu
+        JMenu editMenu = new JMenu("Edit");
+        JMenuItem settingsItem = new JMenuItem("AI Configuration");
+        settingsItem.addActionListener(e -> openAIConfigDialog());
+        editMenu.add(settingsItem);
+        
+        menuBar.add(editMenu);
+        setJMenuBar(menuBar);
     }
 
     private JButton makeToolButton(String tooltip, javax.swing.Icon icon) {
@@ -346,7 +364,12 @@ public class MainFrame extends JFrame {
         connectionListPanel.addTreeSelectionListener(e -> {
             ConnectionInfo info = connectionListPanel.getSelectedConnection();
             newTabBtn.setEnabled(info != null);
-            if (info != null) dashboardPanel.onConnectionChanged(info);
+            if (info != null) {
+                dashboardPanel.onConnectionChanged(info);
+                if (aiAssistantPanel != null) {
+                    aiAssistantPanel.setConnection(info);
+                }
+            }
         });
         sqlEditorPanel.setOnRunQuery(this::runQuery);
         sqlEditorPanel.addChangeListener(e -> updateStatus());
@@ -948,5 +971,65 @@ public class MainFrame extends JFrame {
         String msg = cause.getMessage();
         if (msg == null || msg.isBlank()) msg = cause.getClass().getSimpleName();
         return msg;
+    }
+    
+    /**
+     * Opens the AI Configuration dialog.
+     * Allows users to configure API provider, model, and authentication.
+     */
+    private void openAIConfigDialog() {
+        AIConfigDialog dialog = new AIConfigDialog(this, aiConfigManager);
+        dialog.setVisible(true);
+        if (aiAssistantPanel != null) {
+            aiAssistantPanel.refreshModelSelector();
+        }
+    }
+    
+    /**
+     * Opens the AI Assistant dialog window.
+     * The AI Assistant helps generate SQL queries from natural language descriptions.
+     */
+    private void openAIAssistant() {
+        // Get the currently selected connection
+        ConnectionInfo selectedConnection = connectionListPanel.getSelectedConnection();
+        
+        // If nothing selected in tree, try getting from active tab
+        if (selectedConnection == null) {
+            selectedConnection = sqlEditorPanel.getActiveTabConnection();
+        }
+
+        // Validate selection and connection status
+        if (selectedConnection == null) {
+            JOptionPane.showMessageDialog(this,
+                "Please select a database from the connection list first.",
+                "No Database Selected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        if (!connectionManager.isConnected(selectedConnection.getId())) {
+            JOptionPane.showMessageDialog(this,
+                "The database '" + selectedConnection.getName() + "' is not connected.\n" +
+                "Please connect to the database before opening AI Assistant.",
+                "Database Not Connected", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // Create dialog if not already created
+        if (aiAssistantDialog == null) {
+            aiAssistantPanel = new AIAssistantPanel(connectionManager, aiConfigManager);
+            aiAssistantDialog = new JDialog(this, "AI SQL Generator Assistant", false);
+            aiAssistantDialog.setContentPane(aiAssistantPanel);
+            aiAssistantDialog.setSize(900, 750);
+            aiAssistantDialog.setLocationRelativeTo(this);
+            aiAssistantDialog.setDefaultCloseOperation(JDialog.HIDE_ON_CLOSE);
+        } else {
+            aiAssistantPanel.refreshModelSelector();
+        }
+        
+        // Context is strictly bound to the selected connection
+        aiAssistantPanel.setConnection(selectedConnection);
+        
+        // Show dialog
+        aiAssistantDialog.setVisible(true);
     }
 }

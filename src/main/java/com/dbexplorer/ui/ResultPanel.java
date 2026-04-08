@@ -325,6 +325,8 @@ public class ResultPanel extends JPanel {
             currentLazyResult.close();
             currentLazyResult = null;
         }
+        // Clear the table model data to free memory
+        tableModel.clearData();
         columnWidthsApplied = false;
         fetching = false;
     }
