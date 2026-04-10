@@ -1,486 +1,325 @@
-# DB Explorer
-## Database Query Tool & Explorer
+# DB Explorer — Database Query Tool & Explorer
 
-**Version:** 2.4.1  
-**Release Date:** March 31, 2026  
-**Built by:** Ashish Srivastava  
-**Copyright:** © 2026 Astro Adept AI Labs
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Features](#features)
-3. [System Requirements](#system-requirements)
-4. [Installation](#installation)
-5. [Quick Start](#quick-start)
-6. [User Interface](#user-interface)
-7. [Configuration](#configuration)
-8. [Database Support](#database-support)
-9. [Troubleshooting](#troubleshooting)
-10. [Release Notes](#release-notes)
-11. [License](#license)
-12. [Support](#support)
+**Version:** 2.4.1 &nbsp; | &nbsp; **Released:** April 2026 &nbsp; | &nbsp; **By:** Ashish Srivastava &nbsp; | &nbsp; **©** 2026 Astro Adept AI Labs
 
 ---
 
 ## Overview
 
-DB Explorer is a powerful, user-friendly database query tool and explorer designed for developers, database administrators, and data analysts. It provides an intuitive graphical interface for connecting to various database systems, executing SQL queries, and exploring database schemas.
+DB Explorer is a cross-platform database query tool and schema explorer for developers, DBAs, and data analysts. It provides a clean GUI for connecting to multiple databases, writing SQL, exploring schemas, monitoring health, and generating SQL using AI.
 
-**Key capabilities include:**
-- Multi-database support (PostgreSQL, MySQL, SQL Server, Oracle, SQLite, etc.)
-- Real-time query execution with syntax highlighting
-- Interactive schema browser with expandable tree navigation
-- Table data viewer and editor
-- Query result export capabilities
-- Connection management and health monitoring
-- Memory management and performance monitoring
+**Key capabilities:** Multi-database support (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, SQLite, DynamoDB) · Multi-tab SQL editor with syntax highlighting · AI-powered SQL generation · 13 live-switching themes · Execution plan viewer · Database health dashboard · Query result export (CSV, INSERT, UPDATE, DDL)
 
 ---
 
-## Features
+## What's New in v2.4.1
 
-### Core Features
-- Multi-tab query interface with syntax highlighting
-- Real-time SQL execution and result display
-- Interactive database schema explorer
-- Table data viewer with pagination
-- Query result export (CSV, INSERT, UPDATE, DDL)
-- Connection health monitoring and auto-reconnection
-- Memory usage monitoring with manual garbage collection
-
-### User Experience
-- Modern, responsive GUI with multiple themes
-- Color-coded status messages and visual feedback
-- Confirmation dialogs for destructive operations
-- Keyboard shortcuts and intuitive navigation
-- Context-sensitive help and tooltips
-
-### Database Features
-- Support for major database systems
-- Live connection monitoring
-- Schema exploration (tables, views, procedures, etc.)
-- Column metadata and data type information
-- Foreign key relationships
-- Index and constraint information
-
-### Performance & Reliability
-- Lazy loading for large result sets
-- Configurable memory limits and fetch sizes
-- Automatic connection pooling and reconnection
-- Background query execution
-- Memory leak prevention and cleanup
-
----
-
-## System Requirements
-
-### Minimum Requirements
-- **Operating System:** Windows 10+, macOS 10.14+, Linux (Ubuntu 18.04+)
-- **Java Runtime:** Java 17 or higher
-- **Memory:** 512 MB RAM (1 GB recommended)
-- **Disk Space:** 100 MB free space
-- **Display:** 1024x768 resolution or higher
-
-### Recommended Specifications
-- **Operating System:** Windows 11, macOS 12+, Linux (Ubuntu 20.04+)
-- **Java Runtime:** Java 17 LTS
-- **Memory:** 2 GB RAM or more
-- **Disk Space:** 500 MB free space
-- **Display:** 1920x1080 resolution or higher
-
-### Supported Databases
-- PostgreSQL 9.0+
-- MySQL 5.5+
-- MariaDB 10.0+
-- Microsoft SQL Server 2012+
-- Oracle Database 11g+
-- SQLite 3.0+
-- Amazon DynamoDB
-- Generic JDBC-compatible databases
-
----
-
-## Installation
-
-### Option 1: Pre-Built Distribution (Recommended)
-
-1. Download the latest release from the project repository
-2. Extract the ZIP file to your desired location
-3. **For JVM-bundled version:**
-   - Run: `db-explorer.exe` (Windows) or `./db-explorer` (Linux/Mac)
-4. **For JVM-independent version:**
-   - Ensure Java 17+ is installed
-   - Run: `java -jar db-explorer.jar`
-
-### Option 2: Build from Source
-
-**Prerequisites:**
-- Java Development Kit (JDK) 17 or higher
-- Apache Maven 3.6 or higher
-- Git (optional, for cloning)
-
-**Steps:**
-1. Clone or download the source code
-2. Open terminal/command prompt in the project directory
-3. Run: `mvn clean package`
-4. Find the JAR file in: `target/db-explorer-2.4.1.jar`
-5. Run: `java -jar target/db-explorer-2.4.1.jar`
-
-### Option 3: Development Setup
-
-For developers who want to modify the source code:
-
-1. Clone the repository: `git clone <repository-url>`
-2. Import as Maven project in your IDE (IntelliJ IDEA, Eclipse, etc.)
-3. Ensure JDK 17+ is configured
-4. Run the main class: `com.dbexplorer.ui.MainFrame`
+| Feature | Details |
+|---------|---------|
+| AI SQL Generator | Natural language to SQL — supports OpenAI, Claude, DeepSeek, Gemini, Custom |
+| Animated Progress Bars | Shown during query execution, test connection, and AI generation |
+| Settings Menu | Replaces "Edit" menu — access via `Alt+S` |
+| Help Menu | 6 tabbed in-app help topics + About dialog link — access via `Alt+H` |
+| 13 Themes | Live switching from toolbar dropdown, no restart needed |
+| SQL Server Explain Fix | Now returns actual execution plan instead of query text |
+| Execution Plan | Horizontal scroll added, word wrap disabled |
+| Claude API Fix | Null `system` field now omitted (was causing test failures) |
+| DeepSeek / Gemini Fix | Null system prompt guard; Gemini uses correct `system_instruction` field |
+| AI Dialog Sizing | Opens at 85% of main window size — adapts to screen resolution |
+| Welcome Screen | AI setup hint added referencing Settings menu |
+| Rebrand | Company renamed to **Astro Adept AI Labs** |
 
 ---
 
 ## Quick Start
 
-### First Time Setup
+```
+# Build from source (requires JDK 17+, Maven 3.6+)
+git clone <repository-url>
+mvn clean package
+java -jar target/db-explorer-2.4.1.jar
 
-1. Launch DB Explorer
-2. The application opens with an empty connections panel
-3. Click the "+" button in the toolbar to add a new database connection
-4. Fill in connection details:
-   - **Connection Name:** A friendly name for your database
-   - **Database Type:** Select from dropdown (PostgreSQL, MySQL, etc.)
-   - **Host:** Database server hostname or IP
-   - **Port:** Database port (default ports are pre-filled)
-   - **Database Name:** The specific database to connect to
-   - **Username/Password:** Database credentials
+# Run pre-built JAR
+java -jar db-explorer.jar
 
-5. Click "Test Connection" to verify settings
-6. Click "Save" to store the connection
-7. Double-click the connection in the tree to connect
+# Need more memory?
+java -Xmx2048m -jar db-explorer.jar
+```
 
-### Executing Your First Query
-
-1. Once connected, click the "New Tab" button in the toolbar
-2. A new query tab opens with a SQL editor
-3. Type your SQL query in the editor
-4. Click the green "Run Query" button or press `Ctrl+Enter`
-5. Results appear in the table below the editor
-6. Use the toolbar buttons to export results if needed
-
-### Exploring Database Schema
-
-1. In the left panel (Connections), expand your database connection
-2. Navigate through the schema tree:
-   - Expand schema names
-   - Browse tables, views, procedures, etc.
-   - Right-click items for context menu options
-3. Double-click tables to view data
-4. Expand table nodes to see columns and their data types
+1. Click **`+`** in the toolbar → fill in host, port, database, credentials → **Test Connection** → **Save**
+2. Double-click the connection in the left panel to connect
+3. Right-click connection → **Open Query Tab** — or click **New Tab** in the toolbar
+4. Type SQL → press `Ctrl+Enter` to run
+5. For AI: go to **Settings → AI Configuration…** → add a profile → click the **AI** toolbar button
 
 ---
 
-## User Interface
-
-### Main Window Layout
+## Main Window Layout
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ [New Connection] [Run] [Cancel] [Explain Plan] [Health]                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ ┌─────────────┐ ┌─────────────────────────────────────┐ ┌─────────────────┐ │
-│ │ Connections │ │         Query Editor                │ │   Connection    │ │
-│ │   Tree      │ │                                     │ │     Health      │ │
-│ │             │ ├─────────────────────────────────────┤ │                 │ │
-│ │             │ │         Results Table               │ │                 │ │
-│ │             │ │                                     │ │                 │ │
-│ └─────────────┘ └─────────────────────────────────────┘ └─────────────────┘ │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Status: Connected to PostgreSQL_Prod | 🗑 Heap: 256 MB / 1024 MB (25%)       │
-└─────────────────────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------------------------------------+
+|  [+] [Run] [Cancel] [NewTab] [Explain] [Health] [AI]    Theme v    Settings  Help        |
++---------------+-------------------------------------------------------------------+-------+
+|               |  Tab 1  |  Tab 2  |  + New                                       |       |
+|  Connections  |------------------------------------------------------------------| Health|
+|  Tree         |  SQL Editor  (syntax highlighting + auto-complete)               | Panel |
+|               |------------------------------------------------------------------|       |
+|  > MyDB       |  Results  |  Explain Plan                                        |       |
+|    > Tables   |                                                                  |       |
++---------------+-------------------------------------------------------------------+-------+
+|  Connected: MyDB (PostgreSQL)                  Heap: 256/1024 MB  [GC]                   |
++-------------------------------------------------------------------------------------------+
 ```
-
-### Toolbar Buttons
-- **New Tab:** Create a new query tab
-- **Run Query:** Execute the current SQL query (green button)
-- **Cancel Query:** Stop a running query (red button)
-- **Disconnect:** Disconnect from current database
-- **Clear Console:** Clear the log panel
-- **Health Dashboard:** Open database monitoring panel
-- **About:** Show application information
-
-### Status Bar Elements
-- Connection status and database name
-- Heap memory usage with progress bar
-- Garbage collection button (🗑)
-- Color-coded status messages (red/amber/green)
-
-### Keyboard Shortcuts
-- `Ctrl+N`: New query tab
-- `Ctrl+Enter`: Run query
-- `Ctrl+S`: Save current query
-- `F5`: Refresh schema tree
-- `Ctrl+F`: Find in results
-- `Ctrl+E`: Export results
 
 ---
 
-## Configuration
+## System Requirements
 
-### Application Configuration
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| Operating System | Windows 10 / macOS 10.14 / Ubuntu 18.04 | Windows 11 / macOS 12+ / Ubuntu 20.04+ |
+| Java Runtime | Java 17 | Java 17 LTS |
+| Memory | 512 MB RAM | 2 GB RAM |
+| Disk Space | 100 MB | 500 MB |
+| Display | 1024x768 | 1920x1080 |
 
-The main configuration file is located at:
-- **Windows:** `%APPDATA%\DBExplorer\app.properties`
-- **macOS:** `~/Library/Application Support/DBExplorer/app.properties`
-- **Linux:** `~/.config/DBExplorer/app.properties`
+---
 
-**Key configuration options:**
+## Installation
 
-```properties
-# Query execution settings
-query.max.rows=10000          # Maximum rows to load per query
-query.fetch.size=500          # Rows fetched per page
+### Option A — Pre-built Distribution (Recommended)
 
-# Export settings
-export.fetch.size=500         # Rows fetched during export
+1. Download the latest release ZIP from the project repository
+2. Extract to any folder
+3. **JVM-bundled:** run `db-explorer.exe` (Windows) or `./db-explorer` (Linux/macOS)
+4. **JVM-independent:** `java -jar db-explorer.jar`
 
-# UI settings
-ui.theme=default              # Application theme
-ui.font.size=12               # Base font size
+### Option B — Build from Source
 
-# Connection settings
-connection.timeout=30         # Connection timeout in seconds
-connection.pool.size=5        # Connection pool size
+```
+git clone <repository-url>
+cd db-explorer
+mvn clean package
+java -jar target/db-explorer-2.4.1.jar
 ```
 
-### Database Connections
+### Option C — Development Setup
 
-Connections are stored securely and can be managed through the UI:
-
-1. Click the "+" button in the toolbar
-2. Select database type from dropdown
-3. Enter connection details
-4. Test connection before saving
-5. Use the context menu for connection management
-
-### Supported Connection Types
-- Direct JDBC connections
-- SSH tunnel connections (planned)
-- SSL/TLS encrypted connections
-- Connection pooling configurations
+1. Clone the repository
+2. Import as Maven project in IntelliJ IDEA or Eclipse
+3. Configure JDK 17+
+4. Run main class: `com.dbexplorer.ui.MainFrame`
 
 ---
 
 ## Database Support
 
-### Fully Supported Databases
+| Database | Version | Features |
+|----------|---------|---------|
+| PostgreSQL | 9.0+ | Full schema, `EXPLAIN ANALYZE`, JSON/JSONB, pg_stat views |
+| MySQL / MariaDB | 5.5+ / 10.0+ | Performance schema, stored procedures, `EXPLAIN` tabular |
+| Microsoft SQL Server | 2012+ | DMVs, `SET SHOWPLAN_TEXT`, linked server browsing |
+| Oracle Database | 11g+ | PL/SQL objects, `EXPLAIN PLAN` + `DBMS_XPLAN`, v$ views |
+| SQLite | 3.0+ | File-based, PRAGMA statements, WAL mode |
+| Amazon DynamoDB | — | PartiQL queries, table browsing, key schema display |
+| Generic JDBC | — | Any JDBC-compatible database |
 
-#### PostgreSQL
-- Full schema exploration
-- Table/view/procedure browsing
-- Live statistics via pg_stat_* views
-- JSON/JSONB data type support
-- Array and composite type handling
+---
 
-#### MySQL/MariaDB
-- Complete schema information
-- Performance schema integration
-- Stored procedure and function support
-- MySQL-specific data types
+## Toolbar Reference
 
-#### Microsoft SQL Server
-- Comprehensive schema metadata
-- SQL Server Management Objects integration
-- Dynamic management views support
-- Linked server browsing
+| Button | Shortcut | Action |
+|--------|----------|--------|
+| `+` Add Connection | — | Open new connection dialog |
+| Run | `Ctrl+Enter` | Execute current SQL query (green) |
+| Cancel | — | Stop running query (red) |
+| New Tab | `Ctrl+N` | Open a new query editor tab |
+| Explain | — | Show execution plan for current query |
+| Health | — | Open database health dashboard |
+| AI | — | Open AI SQL Generator |
+| Theme dropdown | — | Switch theme instantly — saved automatically |
+| About | — | Show version and build info |
 
-#### Oracle Database
-- Advanced schema exploration
-- Oracle-specific object types
-- Performance monitoring via v$ views
-- PL/SQL object support
+---
 
-#### SQLite
-- File-based database support
-- PRAGMA statement integration
-- Lightweight schema browsing
-- WAL mode support
+## Menu Bar
 
-#### Amazon DynamoDB
-- NoSQL table browsing
-- Item count and size information
-- Key schema display
-- Basic query capabilities
+| Menu | Shortcut | Items |
+|------|----------|-------|
+| Settings | `Alt+S` | AI Configuration… |
+| Help | `Alt+H` | User Guide · DB Connection · AI Configuration · DB Health · Execution Plan · Themes · *(separator)* · About DB Explorer |
 
-#### Generic JDBC
-- Any JDBC-compatible database
-- Basic schema information
-- Standard SQL support
-- Connection health monitoring
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action | Shortcut | Action |
+|----------|--------|----------|--------|
+| `Ctrl+Enter` | Run query | `F5` | Refresh schema tree |
+| `Ctrl+Z` | Undo | `Ctrl+Y` | Redo |
+| `Ctrl+N` | New query tab | `Ctrl+S` | Save query |
+| `Ctrl+E` | Export results | `Ctrl+F` | Find in results |
+| `Alt+S` | Settings menu | `Alt+H` | Help menu |
+
+---
+
+## AI SQL Generator
+
+Convert natural language descriptions into SQL using your configured AI model.
+
+| Provider | Example Models | Notes |
+|----------|---------------|-------|
+| OpenAI | `gpt-4o`, `gpt-3.5-turbo` | Standard OpenAI API |
+| Claude | `claude-sonnet-4-20250514` | Anthropic API |
+| DeepSeek | `deepseek-chat` | OpenAI-compatible format |
+| Gemini | `gemini-1.5-pro` | Google Generative AI |
+| Custom | Any model name | Any OpenAI-compatible endpoint |
+
+**Setup:** Go to **Settings → AI Configuration…** → click **Add New** → fill provider, model, API key → **Test Connection** → **Save** → enable the profile.
+
+**Usage:** Click the **AI** toolbar button (requires active connection) → select AI profile → describe your query → click **Generate SQL** → review → **Copy** or **Insert into Query Tab**.
+
+> The generator is schema-aware — it uses your actual table and column names for accurate output. Always review generated SQL before running against production data.
+
+---
+
+## Execution Plan
+
+| Database | Method | Notes |
+|----------|--------|-------|
+| PostgreSQL | `EXPLAIN ANALYZE` | Shows actual runtime stats |
+| MySQL / MariaDB | `EXPLAIN` | Rendered as tabular view |
+| SQL Server | `SET SHOWPLAN_TEXT ON` | Returns text execution plan |
+| Oracle | `EXPLAIN PLAN FOR` + `DBMS_XPLAN.DISPLAY()` | Full plan output |
+| DynamoDB | Not supported | — |
+
+Click **Explain** in the toolbar after writing a SELECT query. The plan appears in the **Explain Plan** tab below the editor with horizontal scrolling and no word wrap.
+
+---
+
+## Database Health Dashboard
+
+Click the **Health** toolbar button while connected to open the live monitoring panel.
+
+| Panel | Information Shown |
+|-------|------------------|
+| Connection | Host, port, database name, driver version, ping latency |
+| Server Stats | Uptime, active connections, cache hit ratio, database size |
+| Active Queries | Currently running queries with duration and state |
+| JVM Stats | Local heap usage, GC count, thread count |
+
+Stats refresh automatically. Click **Refresh** for an instant update.
+
+---
+
+## Themes
+
+Switch live from the **Theme** dropdown in the toolbar — no restart needed. Your selection is saved and restored on next launch.
+
+| Theme | Style | Best For | Theme | Style | Best For |
+|-------|-------|----------|-------|-------|----------|
+| Flat Dark | Dark | Default, most environments | Flat Darcula | Warm dark | JetBrains IDE users |
+| Flat Light | Light | Bright rooms, screenshots | Flat IntelliJ | Light | IntelliJ IDEA users |
+| Ocean Blue | Dark blue | Long sessions, calm palette | Forest Green | Dark green | Relaxed, earthy feel |
+| Sunset Purple | Dark purple | Vibrant, high contrast | Cherry Red | Dark + red | Bold, high energy |
+| Amber Warm | Warm amber | Evening work | Arctic Frost | Cool light | Clean, airy feel |
+| Rose Garden | Light + rose | Elegant light theme | System | OS native | Matches your OS |
+| Metal | Java default | Consistent cross-platform | | | |
+
+---
+
+## Configuration
+
+Config file location:
+- **Windows:** `%APPDATA%\DBExplorer\app.properties`
+- **macOS:** `~/Library/Application Support/DBExplorer/app.properties`
+- **Linux:** `~/.config/DBExplorer/app.properties`
+
+```properties
+query.max.rows=10000      # Maximum rows to load per query
+query.fetch.size=500      # Rows fetched per page
+export.fetch.size=500     # Rows fetched during export
+connection.timeout=30     # Connection timeout in seconds
+```
 
 ---
 
 ## Troubleshooting
 
-### Common Issues and Solutions
+| Problem | Solution |
+|---------|---------|
+| App won't start | Verify Java 17+: `java -version` · Try `java -Xmx1024m -jar db-explorer.jar` |
+| Connection fails | Check server is running · Verify firewall/port · Use Test Connection in dialog |
+| Out of memory | Use `java -Xmx2048m` · Reduce `query.max.rows` · Click GC button in status bar |
+| SQL Server plan shows query text | User needs `SHOWPLAN` permission · Disconnect and reconnect, then retry |
+| AI generator returns error | Check API key in Settings · Use Test Connection · Check provider quota/rate limits |
+| Schema tree empty after connect | Press `F5` to refresh · Verify user has metadata access privileges |
+| Slow queries | Use Explain Plan to find full table scans · Add indexes · Use `LIMIT` clauses |
 
-#### Application Won't Start
-- Ensure Java 17+ is installed: `java -version`
-- Check available memory: `java -Xmx1024m -jar db-explorer.jar`
-- Verify JAR file integrity
-- Check console output for error messages
+**Enable debug logging:** add `-Dlogging.level.com.dbexplorer=DEBUG` to JVM arguments.
 
-#### Connection Failures
-- Verify database server is running
-- Check network connectivity and firewall settings
-- Confirm username/password credentials
-- Test connection using database client tools
-- Check JDBC driver compatibility
-
-#### Out of Memory Errors
-- Increase heap size: `java -Xmx2048m -jar db-explorer.jar`
-- Reduce `query.max.rows` in app.properties
-- Use pagination for large result sets
-- Monitor memory usage in status bar
-
-#### Query Performance Issues
-- Add appropriate indexes to database tables
-- Use EXPLAIN PLAN to analyze query execution
-- Limit result sets with LIMIT/OFFSET clauses
-- Consider query optimization techniques
-
-#### Schema Browsing Issues
-- Ensure user has sufficient privileges
-- Check database permissions for metadata access
-- Refresh schema tree (F5)
-- Verify connection stability
-
-#### Export Problems
-- Check file system permissions for export location
-- Ensure sufficient disk space
-- Verify export format compatibility
-- Check for special characters in data
-
-### Logging and Debugging
-
-Enable debug logging by adding to JVM arguments:
-```
--Dlogging.level.com.dbexplorer=DEBUG
-```
-
-Log files are located in:
-- **Windows:** `%APPDATA%\DBExplorer\logs\`
-- **macOS:** `~/Library/Logs/DBExplorer/`
-- **Linux:** `~/.cache/DBExplorer/logs/`
+Log locations: Windows `%APPDATA%\DBExplorer\logs\` · macOS `~/Library/Logs/DBExplorer/` · Linux `~/.cache/DBExplorer/logs/`
 
 ---
 
 ## Release Notes
 
-For detailed release notes, see [RELEASE_NOTES.md](docs/RELEASE_NOTES.md) in the docs/ folder.
+### v2.4.1 — April 2026 *(Latest)*
 
-### Recent Versions
+| Area | Change |
+|------|--------|
+| AI SQL Generator | New feature — natural language to SQL with schema awareness |
+| Progress Bars | Animated indeterminate bars on query execution, test connection, AI generation |
+| Settings Menu | Renamed from "Edit" — `Alt+S` mnemonic |
+| Help Menu | 6 tabbed topics (User Guide, DB Connection, AI Config, DB Health, Exec Plan, Themes) + About |
+| Themes | 13 themes with live switching and persistence |
+| SQL Server Explain | Fixed — now correctly returns execution plan via `SHOWPLAN_TEXT` |
+| Execution Plan UI | Word wrap disabled, horizontal scrollbar added |
+| Claude API | Fixed null `system` field being sent (caused 400 errors) |
+| DeepSeek | Fixed null system prompt being sent as `"null"` string |
+| Gemini | Fixed system prompt — now uses `system_instruction` field correctly |
+| AI Dialog | Size derived from main window (85% width x 80% height) |
+| Welcome Screen | Added AI setup hint referencing Settings menu |
+| Branding | Renamed from Adept Software to Astro Adept AI Labs |
 
-#### Version 2.4.1 (March 31, 2026)
-- Connection safety improvements
-- Double-click protection for disconnections
-- Enhanced user confirmation dialogs
+### v2.4.0 — March 31, 2026
+Enhanced UX for Disconnect and Run Query buttons · Color-coded status messages · Improved validation
 
-#### Version 2.4.0 (March 31, 2026)
-- Enhanced UX for Disconnect and Run Query buttons
-- Color-coded status message system
-- Improved validation and feedback
+### v2.3.0 — March 31, 2026
+Garbage collection button (GC) in status bar · Manual memory control
 
-#### Version 2.3.0 (March 31, 2026)
-- Garbage collection button for memory management
-- Manual memory control features
+### v2.2.0 — March 31, 2026
+Memory leak fixes · Configuration externalization · Performance improvements
 
-#### Version 2.2.0 (March 31, 2026)
-- Memory leak fixes
-- Configuration externalization
-- Performance improvements
-
-#### Version 2.1.0 (Previous)
-- Database Health Dashboard
-- Theme fixes and UI improvements
+### v2.1.0
+Database Health Dashboard · Theme fixes · UI improvements
 
 ---
 
 ## License
 
-DB Explorer is proprietary software developed by Astro Adept AI Labs.
+DB Explorer is proprietary software developed by **Astro Adept AI Labs**.
 
 Copyright (c) 2026 Astro Adept AI Labs. All rights reserved.
 
-This software is provided "as is" without warranty of any kind. The authors and copyright holders disclaim all warranties, express or implied, including but not limited to the implied warranties of merchantability and fitness for a particular purpose.
-
-Permission is granted to use this software for personal, educational, and commercial purposes, subject to the following conditions:
-
 1. This copyright notice must be included in all copies or substantial portions of the software.
-
 2. The software may not be redistributed or sold without explicit written permission from Astro Adept AI Labs.
-
 3. Any modifications to the source code must be clearly marked and documented.
 
-For licensing inquiries, please contact:   
-Astro Adept AI Labs  
-Email: adeptashish@gmail.com
+For licensing inquiries: adeptashish@gmail.com
 
 ---
 
 ## Support
 
-### Support Options
-
-#### Documentation
-- User Manual: [docs/USER_HANDBOOK.md](docs/USER_HANDBOOK.md)
-- API Documentation: [docs/DEVELOPERS_GUIDE.md](docs/DEVELOPERS_GUIDE.md)
-- Troubleshooting Guide: [docs/EXECUTION_AND_DEPLOYMENT_GUIDE.md](docs/EXECUTION_AND_DEPLOYMENT_GUIDE.md)
-- Feature Documentation: [docs/](docs/) directory
-
-#### Community Support
-- GitHub Issues: Report bugs and request features
-- Discussion Forums: Community-driven support
-- Stack Overflow: Tag questions with 'db-explorer'
-
-#### Professional Support
-- Email: adeptashish@gmail.com
-- Priority response for licensed users
-- Custom development and integration services
-- Training and consulting services
-
-### Reporting Issues
-
-When reporting bugs, please include:
-
-1. DB Explorer version and build date
-2. Operating system and Java version
-3. Database type and version
-4. Steps to reproduce the issue
-5. Expected vs. actual behavior
-6. Log files and error messages
-7. Screenshot if applicable
-
-### Feature Requests
-
-Feature requests are welcome! Please include:
-
-1. Use case description
-2. Expected behavior
-3. Database systems affected
-4. Priority level (nice-to-have vs. critical)
-5. Any mockups or examples
+| Channel | Details |
+|---------|---------|
+| User Handbook | [docs/USER_HANDBOOK.md](docs/USER_HANDBOOK.md) — full feature documentation |
+| Email | adeptashish@gmail.com |
+| Bug Reports | GitHub Issues — include version, OS, Java version, DB type, steps to reproduce |
+| Feature Requests | GitHub Issues — include use case, expected behaviour, affected DB systems |
+| Q&A | Stack Overflow — tag: `db-explorer` |
 
 ---
 
-## Thank You for Using DB Explorer!
-
-DB Explorer is designed to make database development and administration more efficient and enjoyable. We appreciate your feedback and contributions to making it even better.
-
-For the latest updates and releases, visit our project repository.
-
-**Happy querying!**
-
----
-
-*Built by Astro Adept AI Labs | © 2026*
+*Built by Astro Adept AI Labs | © 2026 | Happy querying!*

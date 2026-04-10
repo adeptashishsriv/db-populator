@@ -1,6 +1,6 @@
 # 📓 Release Notes: DB Explorer v2.5.0 - The "AI Power" Update
 
-**Release Date:** May 22, 2024  
+**Release Date:** April 10, 2026  
 **Publisher:** Astro Adept AI Labs  
 **Version:** 2.5.0
 
@@ -46,11 +46,6 @@ The AI Assistant is now smarter about your environment:
 
 ---
 
-## 🏷️ Rebranding
-We are proud to announce that our team has transitioned from **Adept Software** to **Astro Adept AI Labs**. This change reflects our commitment to pushing the boundaries of AI-integrated developer tools.
-
----
-
 ## 🛠 Technical Fixes
 *   Fixed a 404 error occurring during Claude API test connections.
 *   Resolved a bug where the Base URL was not properly clearing when switching between Custom and Native providers.
@@ -59,4 +54,4 @@ We are proud to announce that our team has transitioned from **Adept Software** 
 
 ---
 
-*Built by Astro Adept AI Labs | © 2024*
+*Built by Astro Adept AI Labs | © 2026*
