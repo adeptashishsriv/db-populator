@@ -1,0 +1,14 @@
+{
+  "connectionName": "Test AzureSQL",
+  "databaseType": "SQLSERVER",
+  "host": "retailserver-nw.database.windows.net",
+  "port": 1433,
+  "databaseName": "supplychaindb",
+  "username": "adminnw",
+  "query": "SELECT * FROM pg_tables LIMIT 5",
+  "ddlScriptPath": null,
+  "aiProvider": "Claude",
+  "aiModel": "claude-sonnet-4-20250514",
+  "aiBaseUrl": "https://api.anthropic.com/v1",
+  "aiPrompt": "Show all tables in the database"
+}
